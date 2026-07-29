@@ -1,0 +1,57 @@
+# Clyffy_Avatar — SOURCE + TOOLS ONLY (operator ruling 2026-07-29)
+#
+# On disk this project is 13 GB. Almost none of it is source. The pipeline in tools/ is
+# 824 KB and rebuilds everything under mesh/ from the base mesh; work/ is scratch. Committing
+# the outputs would make a public repo nobody can clone, and two files exceed GitHub's HARD
+# 100 MB limit outright (the voice GGUFs at 406 MB and 124 MB — LFS does not help, they are
+# rejected at push).
+#
+# What this repo IS: the 12-stage Blender pipeline, the pack SSOT, the gates, the docs, and
+# the reference the work is measured against. Clone it, run the chain, get the avatar.
+
+# ── DERIVED GEOMETRY (3.8 GB) — tools/ rebuilds all of it ────────────────────
+# 184 .blend = 5.2 GB · 9 .vrm = 657 MB. mesh/canon/* is the OUTPUT of the chain
+# documented in tools/rebuild.sh --from-scratch, not its input.
+mesh/
+
+# ── SCRATCH (8.4 GB) ────────────────────────────────────────────────────────
+# Staging dirs, probe renders, voice models, demo builds. Nothing here is authored.
+work/
+
+# ── ⚠️ SHOW-BIBLE ART — DELIBERATELY EXCLUDED FROM A PUBLIC REPO ────────────
+# canon/CLYFFY/ is the DevPULSE / AngryVibes show material pulled from the operator's private
+# Drive. This repository is PUBLIC and git history is effectively permanent, so it is excluded
+# by DEFAULT rather than by omission. The operator can add it deliberately; nobody can
+# un-publish it afterwards.
+# Restore locally with: ./pull-canon.sh   (needs the operator's read-only Drive remote)
+canon/CLYFFY/
+canon/docs/
+
+# ── Blender autosaves (39 files, 1 GB) ──────────────────────────────────────
+*.blend1
+*.blend2
+
+# ── The OLD rollback scheme, which git replaces ──────────────────────────────
+# Before this repo existed, every promotion wrote a `.pre-<phase>` sibling. That is what
+# version control is for; the siblings stay local and are not history.
+*.pre-*
+*.bak
+*.bak.blend
+
+# ── Python / tooling noise ──────────────────────────────────────────────────
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+
+# ── OS / editor ─────────────────────────────────────────────────────────────
+.DS_Store
+*.swp
+*~
+
+# ── ⚠️ WHOLE-CAST ELEMENT TOKENS — excluded from a PUBLIC repo ───────────────
+# canon/_MASTER_REGISTRY.md tabulates higgsfield element-token UUIDs for ALL ELEVEN show
+# characters, most of them unreleased. They are resource identifiers rather than credentials
+# (useless without the operator's account auth) but they are unreleased-show IP and public git
+# history cannot be withdrawn. Restore locally with ./pull-canon.sh
+canon/_MASTER_REGISTRY.md

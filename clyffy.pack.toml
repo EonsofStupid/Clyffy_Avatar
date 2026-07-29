@@ -1,0 +1,944 @@
+# CHARACTER PACK MANIFEST — clyffy
+#
+# One of these per character in CLYFFY_AND_MINIONS. Declarative source of truth for the
+# avatar build, mirroring the capability-pack pattern. Every tool reads values from here
+# rather than re-deriving them, because re-deriving is what got the wrong part of his
+# skull cut open.
+
+name        = "clyffy"
+species     = "holstein-cow"
+build       = "anthropomorphic-biped"
+role        = "Lead AI Synergist · show protagonist · 'The OS'"
+origin      = "the operator turned into a lead character"
+
+# ── PACK FREEZE ───────────────────────────────────────────────────────────────
+# v0.1-talk-ready: face + rig + control surface frozen for local voice work.
+# Live companion window / E2 / fingers / goggles / ASR phonemes are NOT in this freeze.
+[pack]
+version     = "0.1.0-talk-ready"
+frozen_at   = "2026-07-27"
+status      = "STATUS.md"
+blender     = "/opt/blender-5.2.0/blender-wrapper.sh"
+blender_min = "5.2"
+gate        = "G1–G7 in STATUS.md — open local voice job only when accept is green"
+
+# ── CALIBRATION ───────────────────────────────────────────────────────────────
+# MEASURED, never inferred — and MEASURED IN A DECLARED SPACE. An angle without a space
+# is not a calibration. The 225.0 recorded here on 2026-07-25 was wrong twice over and
+# cost three failed jaw rigs; see BUILD_LOG 2026-07-25 (axis correction) for the full
+# account. Both errors are now closed:
+#
+#   1. WRONG SPACE. 225.0 was read off a render sweep, and renders are WORLD space. Every
+#      tool then applied it to `v.co`, which is LOCAL. The Tripo object carried a +69.17
+#      deg Z rotation, so the hinge axis was 69 deg off and the mouth cavity was extruded
+#      into the cheek. FIXED AT SOURCE: tools/canonicalize.py freezes the transform, so
+#      the canonical mesh has identity rotation and local == world. Tools assert it.
+#   2. WRONG VALUE. Re-measured two independent ways that agree to 1.4 deg:
+#        3D bilateral-symmetry solve (tools/head_axis.py)   233.75 deg
+#        image mirror-difference scan (tools/_mirrorscore.py) 235.12 deg  <- unimodal curve
+#      225.0 scores 0.058 mirror-difference vs 0.008 at the minimum: ~6x worse. It looked
+#      head-on to the eye, which is exactly why eyeballing a contact sheet is not a method.
+[calibration]
+forward_axis_deg = 235.1        # MEASURED 2026-07-25, two independent solvers, WORLD space
+forward_axis_space = "world == local on the canonical mesh (transform frozen)"
+up_axis          = "+Z"
+scale_note       = "source meshes arrive normalised (~1 unit tall), NOT metres — set real height before rigging"
+camera_convention = "loc = ctr + (sin a, -cos a) * R ; rot = (90deg, 0, a)"
+
+# ── CANONICAL ASSET CHAIN ─────────────────────────────────────────────────────
+# Build in this order; each stage asserts its input is canonical.
+[pipeline]
+canonical  = "mesh/canon/clyffy_v2_canon.blend"   # tools/canonicalize.py — frozen transform, operator groups baked, cleaned
+mouth_open = "mesh/canon/clyffy_v2_open.blend"    # tools/mouth_open.py   — seam cut, cavity
+chin_mass  = "mesh/canon/clyffy_v2_chin.blend"    # tools/chin_mass.py    — mandible growth (displacement only)
+eyes_open  = "mesh/canon/clyffy_v2_eyes.blend"    # tools/eye_open.py     — eyeball domes separated on the socket rim
+parts      = "mesh/canon/clyffy_v2_parts.blend"   # tools/mouth_parts.py  — teeth arcs + tongue inside the bag
+atlas      = "mesh/canon/clyffy_v2_atlas.blend"   # tools/face_atlas.py   — weighted facial region groups
+shapes     = "mesh/canon/shapes/clyffy_v2_shapes.blend"  # tools/shape_author.py — ARKit-52 blendshapes
+rigged     = "mesh/canon/clyffy_v2_rig.blend"     # tools/jaw_rig.py      — jaw/skull/root only (face proven)
+body       = "mesh/canon/body/clyffy_v2_body.blend"  # tools/body_rig.py — VRM-humanoid + face weights
+# Lip rest seal (tools/lip_seal.py) runs on parts BEFORE atlas/shapes so the rest
+# pose does not tunnel-view the teeth. amount=0.85, fwd_bulk=0.0025H, teeth_inset=0.008H.
+# The operator's hand-picked regions live IN the canonical mesh as vertex groups
+# (op_jaw_region 390, op_lip_seam 81), not as raw vertex indices in side .blend files.
+# Indices force every downstream step to preserve numbering exactly; groups do not.
+operator_groups = ["op_jaw_region", "op_lip_seam"]
+
+# ── BUILD PARAMETERS (settled by measurement — see BUILD_LOG 2026-07-25) ──────
+# These are the tool defaults. Recorded here so the chain is reproducible and so the
+# values that were REJECTED are not silently retried.
+[cut]
+depth        = 0.12       # fraction of body height. Must EXCEED the widest aperture the
+                          # jaw reaches (0.055 at 22 deg) or the jaw swings past the back wall.
+# "depthfrac:lateral_scale:half_height". The original profile scaled rings UNIFORMLY
+# toward the hole centroid and produced a flat SLOT — 0.1846 deep, 0.1445 wide, 0.0077
+# TALL. No room for teeth (~0.009), let alone a tongue. Rings now expand vertically into
+# a real bag (0.0504 tall) behind the lips, while the lip line stays shut at rest.
+ring_profile = "0.30:0.98:0.015,0.70:0.92:0.033,1.00:0.60:0.026"
+bag_height   = 0.0504
+rim_relax    = 0          # REJECTED at every setting: plain Laplacian shrinks the loop 4.6%,
+                          # Taubin fixes shrinkage (-0.63%) but BOTH put bright specks along
+                          # the lip line in the REST pose. The slit is 0.0077 tall, so even a
+                          # 0.0032 vertex move is ~40% of it. Rest pose wins.
+
+[chin_mass]
+# Added 2026-07-28 (M2). Grows a mandible as a smooth DISPLACEMENT FIELD — no new geometry,
+# vertex count and indices preserved, because body_rig.py transfers face weights BY VERTEX
+# INDEX and asserts equal counts. Growth is measured from the JAWLINE PLANE (hinge + lip
+# line), the same plane jaw_rig.py splits weights on, so the lip line never moves.
+depth       = 0.045       # DEEPENED 2026-07-28 once the lip rim was unfrozen. While the aperture
+                          # came only from jaw rotation, chin depth traded against gape 1:1 and
+                          # 0.028 was the ceiling. The lips now carry ~1.2%H of aperture on their
+                          # own, so the jaw could drop to 10 deg and the chin could be defined.
+u_dead      = 0.014       # NOT optional — the lip slit is 0.0077 tall with ~0.0008 edges, so a
+                          # ramp starting at u=0 tore it 4.67x and erupted two white "fangs"
+                          # at the commissures. Holding the field at zero across the slit
+                          # removes both at zero cost to the mandible.
+u_lo        = 0.032
+u_hi        = 0.048
+u_max       = 0.105       # ramp-out must satisfy (u_max-u_hi) > 1.5*depth or the surface
+                          # FOLDS through itself. Asserted in-tool; it fired on depth 0.055.
+fill        = 0.006       # forward fill. Keep small — this is what turns a jaw into a jowl.
+along       = [0.020, 0.140]   # ramp the mass in toward the chin; a flat mask thickens the
+                               # whole jaw and merges its rear into the neck
+lateral     = [0.070, 0.140]   # mouth half-span is ~0.072H — keep growth under the mouth
+protected   = ["mouth interior", "lip rim", "eyes", "teeth", "tongue", "navy garment"]
+# ⛔ THE GARMENT IS TEXTURE ON THE SAME SURFACE — there is no separate shirt mesh, so
+# displacing geometry under it drags the collar. Protected by SAMPLING the base-colour image
+# per vertex UV. Do NOT locate the collar with max(navy z): the lanyard is blue too and
+# reports z +0.3527, above the mouth. Scan DOWN for the first band that turns navy.
+collar_z    = 0.1377      # = 9.00%H below the lip line. The hard ceiling on chin depth.
+measured    = { rigid_jaw_core = "742 -> 1316", mean_jaw_weight = "0.506 -> 0.601", edge_stretch_max = 2.92, verts_moved = 1302 }
+
+[jaw_rig]
+# ⚠️ 22.0 -> 13.0 on 2026-07-28. The collar sits 9.00%H below the lip line and that is the
+# whole budget for chin AND neck: with chin depth D and drop d, the chin underside lands at
+# D+d and must stay above the collar, so d < 9.0-D. The chin ships at ~4.5%H, already the
+# optimum of min(D, 9-D), which caps d at ~4.5%H ~ 13 deg. An independent angle ladder
+# agreed by eye (work/m2_ladder): 12-15 reads as a mouth, 18 eats the chin, 22 is a
+# rectangle. GROWING THE CHIN DOES NOT BUY GAPE — it trades against it one-for-one. The only
+# change that raises this ceiling is moving the collar DOWN.
+angle_deg    = 10.0       # 22 -> 13 (collar) -> 10 (chin). Each cut was paid for: 13 by the
+                          # collar arithmetic, 10 by lip-driven aperture after the rim unfreeze.
+hinge_back   = 0.75       # fraction of face depth behind the face front
+hinge_up     = 0.30       # fraction of (top-of-head - mouth); a low hinge scissors, it does not swing
+corner_r     = 0.020      # commissure relief radius, ABSOLUTE. Keep small vs the rim half-span
+                          # (0.072): at 0.044 it frees the upper lip and the aperture collapses.
+smooth       = 0          # post-solve weight relax: cut >2x edges 85->60 but RAISED the max
+                          # to 4.07x and eroded the rigid core 742->560. Not worth it.
+bones        = ["root", "skull", "jaw"]
+skin_groups  = ["root", "skull", "jaw"]
+# Teeth, tongue and eyeballs are SEPARATE connected components. A component with no
+# anchor makes L_FF singular and the harmonic solve ill-posed, so each is anchored
+# rigidly rather than left to the solver.
+rigid_anchors = { teeth_lower = 1.0, tongue = 1.0, teeth_upper = 0.0, eye_L = 0.0, eye_R = 0.0 }
+
+[mouth_parts]
+inset     = 0.030   # back from the lip rim; far enough that the closed lips hide everything
+tooth_h   = 0.009
+tooth_d   = 0.008
+# ── M3, 2026-07-28 — three fixes, each measured. See BUILD_LOG "M3 (2026-07-28)". ──
+# BITE PLANE: both arches close onto the mid-height of the closed rim. Building each band off
+# its OWN lip chain overlapped them by ~0.0068 (chains 0.0077 apart, bands 0.009 tall) and
+# they stayed interpenetrated to 35% open — that z-fighting was the "torn white ribbon".
+bite_plane = "mid-height of the closed lip rim (z +0.2257)"
+# OVERBITE/OVERJET: a flat bite plane hides the teeth (upper crown lands level with the upper
+# lip rim → 0.0007 of tooth visible when open). Upper crowns hang BELOW the lower ones and
+# clear them FORWARD, so separation is horizontal and the jaw only ever increases it.
+overbite  = 0.0035
+overjet   = 0.006
+# INWARD OFFSET is per-point (local lip tangent rotated 90°), oriented toward the CAVITY
+# CENTROID. A global -fwd offset drove the bands into the cheek at the commissures — the
+# white tooth slivers in every hero since the parts were added. Orienting by -fwd instead of
+# the centroid is ill-conditioned at the corners (dot ~0) and flipped some end rings OUTWARD,
+# putting teeth at arch position 1.43 — wider than the mouth, and immune to `inset`.
+inward    = "per-point local normal, oriented toward the cavity centroid"
+# CONTAINMENT is a measured gate now, not an eyeballed render. 15-ray fan per interior vertex;
+# a ray that escapes = visible. Authoritative copy is in lip_seal.py (the sealed rest pose is
+# what ships); the copy in mouth_parts.py is PRE-SEAL and advisory — central leaks there are
+# the open slit, leaks near arch position 1.0 are the real defect.
+containment = { teeth_lower = 0, teeth_upper = 0, tongue = 0, of = "104 / 96 / 242" }
+separation  = { at_035 = 1.15, at_070 = 2.57, at_100 = 3.82, unit = "%H min 3D distance" }
+# The tongue's dimensions used to live here as `tongue = { lat = 0.052, fwd = 0.075, h = 0.013 }`
+# — the UV-sphere ellipsoid. It is now AUTHORED and every dimension is derived from the cavity
+# at build time, so it has its own section: see [mouth_parts.tongue].
+materials = ["clyffy_teeth", "clyffy_tongue"]
+groups    = ["teeth_upper", "teeth_lower", "tongue"]
+note      = "diffuse_color is set on both materials — Workbench/solid reads that, NOT the Principled input"
+
+# ── FACIAL REGION ATLAS (foundation for every blendshape) ────────────────────
+# Every authored shape deforms a NAMED, WEIGHTED region. Detecting regions once and
+# reusing them is what stops each shape re-deriving geometry — the failure mode that has
+# bitten this build four times (world-vs-local space, sphere fit over the wrong support
+# set, lip classified by z instead of by chain, ancestor lookup with a silent fallback).
+# Weights are smooth falloffs, NEVER binary: a binary region tears at its edge exactly
+# like the 1.0-next-to-0.0 lip rim did.
+[atlas]
+regions = ["lip_upper","lip_lower","lip_corner_L","lip_corner_R",
+           "eyelid_upper_L","eyelid_lower_L","eyelid_upper_R","eyelid_lower_R",
+           "brow_L","brow_R","cheek_L","cheek_R","nose"]
+# Seeds must be SNAPPED TO THE SURFACE. A seed left inside the head is far from every
+# vertex: the nose seed produced 0 verts and the cheek seed peaked at 0.40 instead of 1.0.
+seed_rule = "snap to nearest skin vertex; nose = most-protruding muzzle vert between lip and eyes"
+# Symmetry is measured SPATIALLY, not by vertex count — the eyeball domes are themselves
+# 585 vs 397 verts, so this mesh's density is genuinely asymmetric and a count ratio looks
+# skewed even when placement is correct.
+symmetry_metric = "mirror the L weighted centroid across the midplane, compare to R"
+symmetry_worst  = 0.0148        # lip_corner, 1.51% of body height — all regions pass
+
+[atlas.protected]
+# Skin shapes must NEVER move these; they are bone-driven.
+verts = 1576
+members = ["eye_L","eye_R","mouth bag (cav material)","teeth_upper","teeth_lower","tongue"]
+
+# ── SHAPES (tools/shape_author.py over the atlas) ─────────────────────────────
+# FULL HEAD complete 2026-07-26. ARKit-52 = 43 authored + jawOpen (bone) + 8 eyeLook* (bone).
+[shapes]
+blend   = "mesh/canon/shapes/clyffy_v2_shapes.blend"
+count_authored = 43
+arkit_complete = true          # 43 + jawOpen + 8 eyeLook* = 52
+protected_leaks = 0
+# Exceptions to the 1576-vert protect set (match bone-anchored interior membership):
+jaw_interior_exception    = ["teeth_lower", "tongue", "lower_cavity"]   # jaw* only
+tongue_out_exception      = ["tongue"]                                  # tongueOut only
+sheets = ["mesh/canon/shapes/_headsheet.jpg",
+          "mesh/canon/shapes/_blinksheet.jpg",
+          "mesh/canon/shapes/_eyesheet.jpg",
+          "mesh/canon/shapes/_browsheet.jpg",
+          "mesh/canon/shapes/_mouthsheet.jpg",
+          "mesh/canon/shapes/_mouthsheet2.jpg",
+          "mesh/canon/shapes/_jawsheet.jpg",
+          "mesh/canon/shapes/_cheeknosesheet.jpg"]
+authored_A = ["eyeBlinkLeft","eyeBlinkRight"]
+authored_B = ["eyeSquintLeft","eyeSquintRight","eyeWideLeft","eyeWideRight",
+              "browDownLeft","browDownRight","browInnerUp","browOuterUpLeft","browOuterUpRight"]
+authored_C = ["jawForward","jawLeft","jawRight",
+              "mouthSmileLeft","mouthSmileRight","mouthFrownLeft","mouthFrownRight",
+              "mouthStretchLeft","mouthStretchRight","mouthDimpleLeft","mouthDimpleRight",
+              "mouthUpperUpLeft","mouthUpperUpRight","mouthLowerDownLeft","mouthLowerDownRight",
+              "mouthPressLeft","mouthPressRight","mouthPucker","mouthFunnel",
+              "mouthRollUpper","mouthRollLower","mouthShrugUpper","mouthShrugLower",
+              "mouthClose","mouthLeft","mouthRight"]
+authored_D = ["cheekPuff","cheekSquintLeft","cheekSquintRight",
+              "noseSneerLeft","noseSneerRight","tongueOut"]
+# House rules:
+#   * never binary-translate a region — expand_falloff or the rim tears
+#   * jaw blendshapes must carry the jaw-anchored interior or teeth stay behind
+#   * vertical lip separation past ~1%H opens the cavity onto unmoved upper teeth
+#   * tongueOut must clear the 0.030 tooth inset (~0.048H forward) or it is invisible
+
+# Acceptance thresholds the rig currently meets — regressions should trip these.
+[jaw_rig.verified]
+max_edge_stretch   = 3.85     # tools/stretch_map.py at angle_deg
+edges_over_5x      = 0
+weight_jumps_gt_05 = 0        # tools/_edgeprobe.py — |w0-w1| > 0.5 across any mesh edge
+weight_symmetry    = 1.03     # ratio of mean jaw weight, +side vs -side
+upper_lip_movement = 0.0101
+partition_of_unity = 8.9e-05  # max |1 - sum(weights)| per vertex
+max_influences     = 3
+
+# ── SOURCE ART ────────────────────────────────────────────────────────────────
+[sources]
+base_sheet   = "canon/base_sheet/Clyffy_BASE-NEUTRAL-v1.png"   # decision A3 — neutral, prop-free
+base_views   = "work/views_base/BASE_*.png"
+look_av      = "canon/CLYFFY/AV/canonical/Clyffy_Episodic-Kenny-Protocol.png"
+look_dpn     = "canon/CLYFFY/DPN/Clyffy_Anchor-Standalone-FINAL.png"
+excluded     = ["canon/CLYFFY/DPN/canonical/Clyffy_News-Anchor-v1.png"]  # non-canon: singed coat in DPN, no lanyard, adds headset
+
+# ── LAYERING ──────────────────────────────────────────────────────────────────
+# The base body is modelled and rigged BARE. Everything else is separate geometry
+# parented to the rig. This is what makes decision A2 achievable.
+[layers]
+base_body      = ["fur", "horns", "ears", "muzzle", "tail", "cloven-hooves"]
+base_garment   = "navy-devpulse-tshirt"
+outer_garment  = ["labcoat-clean-dpn", "labcoat-singed-av"]
+props          = ["goggles", "blue-lanyard", "clyffy-id-badge"]
+
+# ── CANON RULES (enforceable) ─────────────────────────────────────────────────
+[rules]
+goggles           = "clear polycarbonate laboratory safety"   # OPERATOR RULING 2026-07-25
+goggles_banned    = ["brass", "steampunk", "aviator", "tinted"]  # old drift, present in the AV art
+goggles_states    = ["on-face", "pushed-up", "resting-on-desk", "in-hand"]
+goggles_absent_ok = false        # never absent from a scene
+banned            = ["cowbell", "bell", "chain", "necklace"]
+required          = ["blue-lanyard", "clyffy-id-badge", "goggles"]
+never_mix         = "singed coat in a DPN scene is rejected output"
+
+[style_lock]
+render   = "Pixar CGI quality x Arcane painterly colour grading"
+fur      = "subsurface scattering — no exceptions"
+lighting = ["deep teal shadow pools", "electric amber rim light", "cold steel-blue monitor fill"]
+forbid   = ["ink outlines", "cel-shading", "2D cartoon", "flat illustration"]
+
+# ── VOICE ─────────────────────────────────────────────────────────────────────
+[voice]
+description = "warm confident baritone"
+signature   = "We are doing this today."
+tic         = "pivots mid-sentence and presents it as the plan"
+# Talking voice (audio) — establishment 2026-07-27. Face API is the control surface;
+# do not invent a second lipsync contract for TTS.
+register_token   = "voice:VOICE-CORPUS:REDACTED — private, see canon/_MASTER_REGISTRY.md"  # Drive corpus; platform clone NOT created
+reference_audio  = "work/voice/clyffy-blend1-voice.mp3"           # pull from Drive if missing
+reference_status = "may be missing locally — brief + new samples still valid"
+tts_slot         = "voice.tts"   # WiredFront / clyffy model slot — do NOT hardcode a model name
+tts_target       = "local-gb10-first"  # platform clone only on explicit operator go
+# ── IDENTITY REFERENCE (F3, operator-picked 2026-07-27) ──────────────────────
+# A/B ran four takes on the five sample_lines: Mark, Andre, Mark-pushed, Zane.
+# Operator picked the PUSHED Mark. This is the YARDSTICK the local GB10 slot tunes
+# toward — it is NOT the backend. tts_target above is unchanged and still local-first;
+# no platform clone was created and none is authorised.
+identity_ref     = "higgsfield seed_audio · preset Mark · speech_rate +18 · loudness_rate +14 · pitch_rate +1"
+identity_wav     = "work/voice/ab/C_mark_zane.wav"        # + C_mark_zane_mono.wav (24k mono, rig-ready)
+identity_drive   = "work/voice/drive/ab_C_mark_push/alpha_talk.mp4"   # waist-up
+identity_drive_full = "work/voice/drive/ab_C_full/alpha_talk.mp4"     # full-body
+identity_note    = "presets cannot be blended; 'Mark with Zane energy' was realised as Mark driven on the tuning params, with a straight Zane take kept as the energy reference (work/voice/ab/D_zane_ref.wav)"
+# Local adapter (2026-07-27): OuteTTS via llama-tts — v0 scaffold, not final identity clone
+backend          = "llama-tts/outetts-0.2"
+tool             = "tools/voice_tts.py"
+tts_bin          = "/home/hades/llama-cpp-roce/build/bin/llama-tts"
+llm_gguf         = "work/voice/models/OuteTTS-0.2-500M-Q5_K_M.gguf"
+vocoder_gguf     = "work/voice/models/WavTokenizer-Large-75-F16.gguf"
+speaker          = "built-in en_male_1 default (external speaker json optional)"
+samples_dir      = "work/voice/samples"
+drive_dir        = "work/voice/drive_v2"
+drive_dir_stale  = "work/voice/drive — 2026-07-27, driven on the PRE-TONGUE face; kept for A/B only"
+# ⚠️ THE VOICE WAS BUILT 2026-07-27 (Phase V, V1-V5 green). NOT open work. The only
+# outstanding item is V6, the OPERATOR A/B in work/voice/SAMPLES.md.
+# ── 2026-07-29 RE-RENDERED THE FACE ONLY ────────────────────────────────────
+# The 2026-07-27 drive mp4s showed the voice over a face that predated the tongue, the four
+# articulation morphs, the jaw-angle contract fix and the mesh patch, so anything built on
+# them would show the OLD mouth. Same five wavs, current face. NO audio was synthesized, NO
+# models were touched, work/voice/drive/ is intact. This is a render, not voice work.
+review_reel      = "work/voice/drive_v2/_all_lines.mp4"
+review_reel_secs = 9.19
+review_lines     = 5
+tts_report       = "work/voice/tts_report.json"
+usage            = "avatar talk + pre-rendered in-character bits; NEVER over concept animations"
+sample_lines     = [
+  "We are doing this today.",
+  "Alright — here is the plan.",
+  "That is the root cause. We fix it at the source.",
+  "Hold on. I am thinking.",
+  "Done. Check the gate.",
+]
+export_format    = "wav mono 24k; pass each sample through tools/avatar_drive.py"
+status_note      = "v0 voice scaffold 2026-07-27 — operator A/B required before calling it Clyffy identity"
+
+# ── RIG TARGET ────────────────────────────────────────────────────────────────
+# REAFFIRMED + EXTENDED 2026-07-26 after checking the 2026 format landscape (operator
+# asked whether VRM is still the right call). It is, and more so than when A1 was made:
+#   * Khronos Group and the VRM Consortium are formally collaborating; VRM is heading for
+#     Khronos glTF Ratified Extension status and an ISO/IEC path behind that. glTF 2.0 is
+#     already ISO/IEC 12113:2022 — and VRM *is* glTF plus extensions, so nothing is
+#     stranded if the avatar layer ever moves.
+#   * OpenUSD is NOT the competitor it looks like. AOUSD and Khronos hold a formal liaison
+#     agreement on the split: USD authors (layers, overrides, variants), glTF delivers
+#     (compact, to a browser / phone / real-time renderer). BOTH/AND — if DevPulse News
+#     ever wants film-grade episode rendering, USD is the authoring side and VRM/glTF
+#     stays the delivery side.
+#   * Gaussian splatting is the loud 2026 thing (KHR_gaussian_splatting shipped Feb 2026)
+#     but is photoreal-plus-3D, not yet shippable, and the wrong tool for a stylised cow.
+#     2D-neural and 3D-rigged are the production-ready options; we want rigged.
+# The COMPANION APP is the real target and it is REAL-TIME, not rendered. Everything built
+# so far renders frames offline in Blender — correct for episodes, insufficient for a
+# desktop companion. Authoring to VRM from here avoids a retrofit.
+[rig]
+format      = "VRM"              # decision A1 — bipedal, so humanoid tooling applies
+spring_bones = ["ears", "tail"]  # a cow has no eyebrows; the EARS carry the emotion
+visemes     = "SHARED between the live avatar and rendered episodes — do not fork"
+open_issue  = "DPN episodic-rendered vs live decides whether visemes optimise for inference or render quality"
+
+# VRM gives three of our requirements as SPEC FEATURES rather than things we implement:
+# lookAt (gaze), spring bones (ears/tail), and the expression system.
+# Non-humanoid geometry (horns, muzzle, tail) rides alongside the humanoid set as
+# non-humanoid bones — well-trodden ground in the anthropomorphic VTuber space.
+[rig.blendshapes]
+# ⭐ PIN: author the face ONCE at ARKit-52 "Perfect Sync" resolution, NOT VRM's small
+# native expression set. Reasons, in order of weight:
+#   1. 52 shapes DOWNSAMPLE cleanly into VRM expression presets. Authoring VRM's handful
+#      first UPSAMPLES into nothing — that is the difference between one authoring pass
+#      and two.
+#   2. ARKit-ready VRMs are driven live by any iPhone. That IS the phone surface, free.
+#   3. It is the de-facto interchange vocabulary (MetaHuman, Ready Player Me, face capture).
+vocabulary = "ARKit-52 Perfect Sync"
+count      = 52
+brow   = ["browDownLeft","browDownRight","browInnerUp","browOuterUpLeft","browOuterUpRight"]
+cheek  = ["cheekPuff","cheekSquintLeft","cheekSquintRight"]
+eye    = ["eyeBlinkLeft","eyeBlinkRight","eyeLookDownLeft","eyeLookDownRight","eyeLookInLeft","eyeLookInRight",
+          "eyeLookOutLeft","eyeLookOutRight","eyeLookUpLeft","eyeLookUpRight","eyeSquintLeft","eyeSquintRight",
+          "eyeWideLeft","eyeWideRight"]
+jaw    = ["jawForward","jawLeft","jawOpen","jawRight"]
+mouth  = ["mouthClose","mouthDimpleLeft","mouthDimpleRight","mouthFrownLeft","mouthFrownRight","mouthFunnel",
+          "mouthLeft","mouthLowerDownLeft","mouthLowerDownRight","mouthPressLeft","mouthPressRight","mouthPucker",
+          "mouthRight","mouthRollLower","mouthRollUpper","mouthShrugLower","mouthShrugUpper","mouthSmileLeft",
+          "mouthSmileRight","mouthStretchLeft","mouthStretchRight","mouthUpperUpLeft","mouthUpperUpRight"]
+nose   = ["noseSneerLeft","noseSneerRight"]
+tongue = ["tongueOut"]
+# Two of the 52 are NOT authored as shapes on this character:
+#   jawOpen   — backed by the existing `jaw` BONE (validated rig, mesh/canon/clyffy_v2_rig.blend).
+#               Driving it twice would double-transform the jaw.
+#   tongueOut — blocked: the cavity is an empty pocket. Needs the teeth/tongue pass first.
+bone_backed = ["jawOpen"]
+blocked     = []          # tongueOut UNBLOCKED 2026-07-26: the tongue exists (mouth_parts.py)
+
+[rig.look_at]
+# ⭐ PIN: VRM lookAt in BONE mode, not expression mode.
+# VERIFIED 2026-07-26 (tools/_facecheck.py, solid shading with the texture stripped): the
+# eyes are REAL GEOMETRY — spherical domes seated in sockets, each with a distinct rim
+# crease. The v1 BUILD_LOG claim "eyeballs are welded into the head surface, not spheres"
+# is WRONG for v2. The iris/pupil is painted on the dome, so separating the dome along its
+# socket rim and ROTATING it moves the gaze correctly. Gaze is a rotation, not a UV hack.
+type      = "bone"
+method    = "separate the eyeball domes along the socket rim, then rotate — the same play as the lip seam"
+seam      = "socket rim crease, visible in solid shading"
+# The eyeLook* entries in the ARKit set become derived/optional once lookAt is bone-driven.
+derived_from_bone = ["eyeLookDownLeft","eyeLookDownRight","eyeLookInLeft","eyeLookInRight",
+                     "eyeLookOutLeft","eyeLookOutRight","eyeLookUpLeft","eyeLookUpRight"]
+# ✅ BLINK RESOLVED 2026-07-26 (tools/eye_probe.py) — and it collapses two tasks into one.
+# Measured: the socket rims are CLEAN CLOSED RINGS (51 and 41 verts, symmetric at lateral
+# -0.0421 / +0.0373), and the domes are genuine spheres — least-squares fit on the isolated
+# cap gives r=0.0318 / 0.0288 with residual 4% / 7% of radius.
+# A naive blink (collapse the eye region vertically, 1003 verts) FAILS: it squashes the
+# EYEBALL along with the skin, giving a distorted still-visible eye rather than a closed
+# lid. That is unavoidable while the mesh is welded — dome and skin share the rim, so the
+# skin cannot slide over the eye because it is attached to it.
+# => BLINK AND GAZE ARE THE SAME JOB. Cut the dome free along the socket rim (the same
+#    operation as the lip seam), and then: the eyeball is rigid and ROTATES for gaze, while
+#    the skin ring CLOSES OVER it for blink. Do not attempt either before the separation.
+# ✅ BOTH PROVEN 2026-07-26 on the separated mesh (tools/eye_open.py + tools/_gazetest.py).
+# GAZE: rotating each dome about its fitted centre moves the painted iris with it — gaze
+#       is a rotation, confirmed on render at ±16° yaw and ±12° pitch.
+# BLINK: the lid must SLIDE OVER the dome, not collapse toward the eye centre's z-plane.
+#        Collapsing z closes the skin BEHIND the eyeball — whose apex protrudes a full
+#        radius in front of that plane — so the eye pokes through. Correct construction:
+#        rotate each skin vert about the LATERAL axis around the eye centre until its
+#        elevation reaches the midline, holding radius >= r*1.06 so it passes in front.
+#        Falloff must be TIGHT (reach ≈ 1.38·r): at 2.1·r the brow and cheek get dragged
+#        in and the face crumples.
+blink        = "skin ring slides over a separated, rigid dome at radius >= 1.06r"
+blink_falloff_reach = 1.38      # × dome radius. 2.1 crumples the face.
+separated    = true             # 3 connected components: body 45856, eye_L 585, eye_R 397
+eye_groups   = ["eye_L", "eye_R"]   # + object props eye_{L,R}_center / _radius for bone placement
+blink_travel = 0.0531   # left; right 0.0554. ~5.4-5.7% of body height for a full close
+rim_verts    = { left = 51, right = 41 }
+dome_fit     = { left_r = 0.0318, right_r = 0.0288, residual_pct = "4-7% of radius" }
+
+[rig.scope]
+# OPERATOR DIRECTION 2026-07-26: the companion app shows him WAIST-UP.
+# AMENDED 2026-07-27: waist-up stays the DEFAULT, but full-body framing is now a
+# supported second surface (present.py --full, avatar_drive.py --full). Legs are no
+# longer "dropped" — they were never missing.
+target   = "waist-up presenter — arms, hands, and ESPECIALLY eyes / face expression"
+framings = ["waist-up (default, companion crop)", "full-body (--full, turnaround / VRM check)"]
+# ⚠️ VRM's humanoid spec REQUIRES leg bones, and the canon body already carries leg
+# GEOMETRY: measured on the lateral axis (NOT world X — the character sits at 235.1°,
+# so an X-axis probe falsely reads the two legs as one fused mass), clyffy_v2_body.blend
+# is fused to 0.80 of height and splits from 0.85 through the hooves, gap 0.079-0.082H.
+# Canon (Clyffy_BASE-NEUTRAL-v1.png) puts the crotch at ~0.78. They agree.
+vrm_legs = "geometry + bones both real; framed on demand via --full"
+# ⚠️ OPEN DEFECT — leg weights are BOUND BUT WEAK, and hips-dominated:
+#   hips        max 0.850 over 32856 verts
+#   upper_leg_L max 0.315 · lower_leg_L max 0.481 · foot_L max 0.389
+# No leg vertex is majority-owned by its own leg bone, so rotating a leg bone only
+# partially moves the limb. Fine for a standing presenter (nothing poses the legs);
+# MUST be fixed before any leg animation, walk cycle, or idle weight-shift.
+leg_weights = "unvalidated — hips-dominated, never posed or tested"
+hardest  = """hands — RESOLVED 2026-07-28, and it was never the job it looked like. Canon is \
+CLOVEN HOOVES (two toes), not fingers, and the mesh already had the right toe count as two \
+soft lobes. No topology work was needed: the hoof is a MATERIAL on the distal faces \
+(tools/hoof.py) and the poseability was the same blanket-weight defect the legs had."""
+
+[rig.body]
+# tools/body_rig.py — built 2026-07-26 on the shapes mesh so ARKit keys + armature coexist.
+blend = "mesh/canon/body/clyffy_v2_body.blend"
+glb   = "mesh/canon/body/clyffy_v2_body.glb"   # glTF intermediate (skins + morphs)
+bones = 32                                      # humanoid + ear/tail multi-segment chains
+shape_keys = 44                                 # Basis + 43 ARKit
+face_weights = "transferred from clyffy_v2_rig.blend by vertex index"
+body_weights = "distance-to-segment falloff, top-4, Σw=1 (bone heat fails on this mesh)"
+head_isolation = "non-face bones zeroed above neck; face_dom kills body bleed on jaw/skull verts"
+sheet = "mesh/canon/body/_bodysheet.jpg"
+
+[rig.vrm]
+# tools/vrm_export.py — VRM Add-on for Blender v4.4.0 (saturday06)
+addon   = "VRM_Addon_for_Blender-release"
+spec    = "1.0"
+vrm     = "mesh/canon/body/clyffy.vrm"
+blend   = "mesh/canon/body/clyffy_v2_vrm.blend"   # body blend with VRM bone names + springs
+humanoid_bones = 22
+morph_targets  = 43
+look_at        = "bone"
+expressions    = "VRM presets via assign_vrm1_expressions_from_arkit (raw ARKit morphs still on mesh)"
+meta_name      = "Clyffy"
+# tools/spring_bones.py — VRMC_springBone 1.0
+spring_bones   = true
+spring_chains  = { ear_L = 3, ear_R = 3, tail = 4 }   # multi-segment, surface-spanning
+spring_colliders = ["head", "muzzle", "hips"]
+humanoid_note  = "force-mapped via HumanBoneName; auto-assign disabled (ear/tail chains confuse structure search)"
+
+[rig.control_surface]
+# What the COMPANION APP (and offline TTS drive) sends the avatar.
+# tools/control_surface.py (apply one state) · tools/avatar_drive.py (time series)
+# DRIVE CONTRACT v1 (voice sink — do not fork for live vs episode):
+#   * One frame = one JSON object matching schema.inputs (same keys as live).
+#   * Timeline = drive_frames.jsonl (one frame object per line) + drive_report.json
+#     written beside the offline mp4. fps default 24.
+#   * Layering: expression_state base, then viseme_weights max-merge, rest_loop zeros all.
+#   * jawOpen is ALWAYS the jaw BONE (max 22°). Never a shape key.
+#   * Alpha lipsync = energy envelope → Oculus-style VISEME labels. Phoneme/ASR later
+#     plugs the same viseme_weights field — no schema fork.
+inputs = ["gaze_target", "viseme_weights", "expression_state", "goggle_state", "rest_loop"]
+note   = "Ties to the rest-state law: rumination triggers a pool of idle animations so the wait stops reading as a wait."
+schema = "mesh/canon/body/control/control_surface.schema.json"
+sheet  = "mesh/canon/body/control/_controlsheet.jpg"
+viseme_sheet = "mesh/canon/body/control/_visemesheet.jpg"
+drive_demo = "mesh/canon/body/drive/alpha_talk.mp4"
+drive_frames = "mesh/canon/body/drive/drive_frames.jsonl"
+drive_report = "mesh/canon/body/drive/drive_report.json"
+fps = 24
+bindings = { gaze_target = "eye_L/eye_R bones (yaw/pitch deg)", viseme_weights = "ARKit mouth keys; jawOpen → jaw BONE, max_deg from ENVELOPE (10° — NOT a literal)", expression_state = "presets happy/sad/angry/surprised/thinking/talk or raw ARKit", goggle_state = "logged only in alpha (prop mesh deferred)", rest_loop = "zeros all drives" }
+# "per-finger hands" removed 2026-07-28 — canon is cloven hooves, so per-finger was never
+# the target. The hoof shipped; see [hoof].
+alpha_deferred = ["goggle prop mesh", "ASR phoneme lipsync", "live VRM viewer", "roadmap E2 avatar mode"]
+visemes_pinned = ["sil", "PP", "FF", "TH", "DD", "kk", "CH", "SS", "nn", "RR", "aa", "E", "I", "O", "U"]
+# Beauty presentation (NOT Workbench diagnostics)
+[rig.present]
+tool   = "tools/present.py"
+engine = "CYCLES"                 # Blender 5.2.0 LTS aarch64 (CUDA sm_120 / GB10) as of 2026-07-27
+blender = "/opt/blender-5.2.0/blender-wrapper.sh"  # NOT Ubuntu apt 4.0.2 — that lacks sm_12x
+look   = "DPN dark studio · amber rim · steel fill · teal bounce · Filmic"
+sheet  = "mesh/canon/body/present/_herosheet.jpg"
+heroes = "mesh/canon/body/present/hero_*.png"
+note   = "Canon style: Pixar CGI × Arcane grading; waist-up 4:5 companion frame; Cycles CUDA preferred, EEVEE fallback"
+
+# ── ANIMATION CONTRACT ────────────────────────────────────────────────────────
+# OPERATOR CORRECTION 2026-07-25: **AVATAR ANIMATION IS BLENDER, AUTHORED BY US.**
+# It is NOT generated clips. I previously conflated two separate production paths:
+#   * 04_storyboard_stills_animations.md = GENERATED concept animations for the EOS
+#     lesson pipeline — character-free, abstract, hosted generation. Different domain.
+#   * THIS = rigged character animation for Clyffy, hand-authored in Blender, local.
+# The "LANE NOTE (locked 2026-07-08): higgsfield only" from that doc DOES NOT APPLY
+# here and was never a constraint on avatar work. Removed as a false conflict.
+
+[animation]
+# BOTH/AND, never either/or. Sources COMPOSE — they are not alternatives.
+#   * Blender  — rigged, hand-authored character animation, local on the GB10 cluster.
+#                This is the spine: the rig, the visemes, the canonical rest poses.
+#   * Generated — image/video/audio via ComfyUI on the GB10 cluster AND via frontier
+#                providers. Fills, backgrounds, concept sets, motion reference, b-roll.
+# Neither replaces the other. A shot may be Blender character over generated plate,
+# or generated concept with Blender-authored rest states. Assume mixture.
+sources = ["blender-local", "comfyui-gb10", "frontier-generated"]
+
+# THE REST-STATE LAW still applies — as behaviour, not as production method.
+# (Principle borrowed from 04_storyboard_stills_animations.md, verbatim:)
+law = "EVERY animation must reach a stable rest state and hold (loop/freeze)"
+
+# Why it generalises: written for a human presenter narrating between beats — an
+# unknown-length gap the visual must survive gracefully. Rumination is the SAME
+# problem. A spinner announces waiting; a rest loop simply IS, and the wait stops
+# reading as a wait. This is Pulse 4 ("the pause is the product") made visible.
+rest_required = true
+rest_kinds    = ["loop", "freeze"]
+
+# One rig, authored once, drives BOTH the live avatar and DevPULSE News.
+dual_surface  = true
+palette       = "DPN dark studio — near-black background, teal accents"
+
+# ── THE GOGGLE STATE MACHINE ──────────────────────────────────────────────────
+# NOT a costume detail. The Show Bible gives these dramatic meaning, so the loading
+# state is expressed through canon rather than through UI furniture bolted on top.
+[animation.goggles]
+up      = "broadcast mode — composed, presenting, the version of himself he wants seen"
+down    = "something bad is about to happen ON PURPOSE — committed, working"
+mapping = "up while idle/listening · the ACT of pulling them down IS the commit-to-work transition · down while ruminating"
+closing = "final frame of every episode: the goggles alone on the desk, possibly smoking"
+
+# ── REST-STATE POOL ───────────────────────────────────────────────────────────
+# The Show Bible already specifies each character's defining pose. Those ARE the
+# rest states — do not invent a separate idle vocabulary.
+[animation.rest_poses]
+clyffy  = "goggles down. Ready."
+wilks   = "already at his station, clipboard up, HUD glowing"
+charlie = "clipboard in both hands, reading, not looking up"
+patches = "mid-incident-report, sweat visible, looking off-frame with concern"
+psych   = "claws over keyboard, expression unreadable"
+gil     = "pointing confidently at something. Wrong direction."
+fleece  = "MacBook open, posture perfect, one eyebrow raised"
+griff   = "pen to notepad, mid-note"
+siggy   = "arm extended, something being built"
+rusty   = "tool in hand, looking at something that needs fixing"
+pip     = "tablet held, LED horns bright"
+
+# ── GENERATION FABRIC ─────────────────────────────────────────────────────────
+# OPERATOR, 2026-07-25: "I will have support for subscriptions, API keys, and local
+# eventually even working as together as one."
+#
+# There is NO single lane. The old "LANE NOTE (locked 2026-07-08): higgsfield only"
+# in 04_storyboard_stills_animations.md is stale and was never a constraint on avatar
+# work. Do not treat any provider as exclusive, and do not declare work blocked
+# because one of them is exhausted.
+[generation]
+model = "one capability, many interchangeable providers — they compose"
+
+# Subscription-authenticated CLIs — agent-addressable from the shell, no API key.
+subscriptions = [
+  "codex exec  -> gpt-image-2   (ChatGPT sub)  VERIFIED WORKING 2026-07-25",
+  "claude code                  (Claude sub)   installed, OAuth",
+  "grok build                   (SuperGrok)    coding agent; xAI image/video is metered",
+  "gemini cli                   (Google acct)  not yet installed here",
+]
+api_keys = ["xai", "openai", "gemini-ai-studio (free tier ~500 img/day)", "higgsfield (credits)"]
+
+# THE ENVIRONMENT THE OPERATOR BUILT — this is the point. The cluster is not a
+# fallback for when credits run out; it is the generation engine, and the frontier
+# subscriptions drive it rather than replace it.
+local = "ComfyUI on the 3-node GB10 cluster — image / video / audio"
+
+status = "TARGET ARCHITECTURE — cluster exists, config system and ComfyUI app not yet built"
+
+# ── MODE CONTRACT ─────────────────────────────────────────────────────────────
+# OPERATOR, 2026-07-25. **MODES ARE MUTUALLY EXCLUSIVE RESOURCE CONFIGURATIONS.**
+# They are NOT feature flags and NOT the same thing as `[gears.*]` in clyffy.toml.
+#
+#   [gears.*]  = persona / prompt / COSTAR configuration. EXISTS today.
+#   modes      = which processes and GPU/memory reservations are STANDING.
+#                DOES NOT EXIST YET — nothing in the repo encodes this.
+#
+# Built in **Rust** specifically so processes and resources are reserved properly —
+# explicit ownership and teardown, not best-effort coexistence.
+[generation.modes]
+kind = "mutually-exclusive resource configurations — never simultaneous"
+
+coding   = "its own configuration"
+training = "clyffy is DOWN — full teardown, not degraded"
+avatar   = "NO coding while avatar mode is up"
+creative = "requires KILLING avatar mode first, WITH A NOTICE to the operator"
+
+transition_rule = "mode changes are explicit, announced, and tear down the previous mode — never silently overlapped"
+
+# WHO TRIGGERS A MODE — operator, 2026-07-25: "clyffy is the UI".
+# There is NO separate supervisor daemon. The SURFACE CONNECTION IS THE MODE EVENT:
+# `clyffy code` or the DevPulse UI comes up, establishes the layer-2 connection between
+# cluster and frontend, and in doing so declares which configuration should be standing.
+# Consistent with the fabric design — every running surface joins the mesh and widens it,
+# so a surface is a node arriving with an intent, not a client asking permission.
+trigger = "surface connection event (clyffy code | DevPulse UI) over the layer-2 link"
+conflict = "surface requests a mode that cannot coexist with the standing one -> operator NOTICE -> confirmed teardown -> new mode stands up"
+note = "DevPulse UI not yet seen — operator will show it. Do not design the handshake ahead of that."
+
+# CONSEQUENCE FOR THE ComfyUI HOST QUESTION (corrects my earlier reasoning):
+# I argued ComfyUI must live off-cluster because it would contend with the brain,
+# embedder and reranker. That argument assumed SIMULTANEITY, which this contract
+# forbids — creative mode stands the coding config down, so the GPU is free.
+# The contention argument is therefore WEAK. Two independent arguments survive:
+#   1. ARM friction — ComfyUI's custom-node ecosystem assumes x86 + desktop CUDA.
+#   2. Blast radius — GB10 holds the vault (Infisical), the brain and the recall
+#      spine; a dedicated creative box is a far safer place to grant full admin.
+# Host decision therefore rests on those two, NOT on resource contention.
+
+# ── LIP RIM (unfrozen 2026-07-28, operator ruling) ───────────────────────────
+[atlas.lips]
+# The 62-vert lip RIM is skin, not interior. It was frozen in TWO independent places —
+# face_atlas excluded it from every region, and shape_author protected it with the bag — so
+# not one of the 43 shapes could move the lip edge and the aperture was 100% jaw-driven.
+domain    = "op_jaw_region ∩ skin (260 verts)"   # the OPERATOR's selection bounds the lips,
+                                                 # not a magic radius. Measured: the old
+                                                 # radius-derived regions sat 251/258 INSIDE
+                                                 # it and missed 118 verts, nearly all below
+                                                 # the lip (7.56%H vs 1.79%H).
+falloff   = "geodesic (Dijkstra over mesh edges, never through the bag)"
+# Euclidean CANNOT separate the lips: the chains sit 0.0077 apart against a 0.030H reach, so
+# lip_upper and lip_lower both scored ~0.99 on all 62 rim verts and "raise the upper lip"
+# raised both. The mouth is genuinely cut, so surface distance separates what space cannot.
+reach     = 0.090
+partition = "w·w/(w_up+w_lo) — a wider reach lets weight round the commissures (cross-talk 0.454)"
+cross_talk = { upper_on_lower = 0.187, lower_on_upper = 0.200, asserted_below = 0.25 }
+bag_rule  = "the BAG stays protected and FOLLOWS the rim by cav_src lineage (full at the rim, zero at the back cap)"
+aperture_from_lips = { frozen = 0.042, freed = 1.18, unit = "%H at full mouthUpperUp*+mouthLowerDown*" }
+note = "op_jaw_region is NOT over-selected — it is a JAW map and the pipeline consumes it as one (jaw_rig rigid core, shape_author jaw falloff). op_lip_seam is the lip line proper."
+
+# ── HOOVES (tools/hoof.py, 2026-07-28) ───────────────────────────────────────
+[hoof]
+# Canon: white furred forearm ending in TWO dark rounded toes. The mesh already carried the
+# right toe count (two soft lobes) — what was missing was the dark keratin, and the body is
+# a single texture, so the hoof gets its own material on the distal faces. Same play
+# mouth_parts.py uses for teeth and tongue. NO geometry change, so this is safe after
+# body_rig: vertex count, indices, weights and all 43 shape keys are untouched.
+frac      = 0.38          # distal fraction of the hand blob, along the forearm axis
+material  = "clyffy_hoof" # dark warm grey, NOT black — black reads as a hole
+verts     = 595
+faces     = 529
+operator_group = "op_hoof"  # if present it WINS; `frac` is only the fallback styling guess
+# ⚠️ TOE COUNT was nearly got wrong. A first read of the base sheet said THREE toes — the
+# crop window straddled two panels of the turnaround and stitched one pose's hand beside
+# another's. Panels are 1668/5 = 333.6 px; crop INSIDE one. Cloven means split in TWO, and
+# the front and 3/4 panels agree.
+
+[rig.body.arm_gate]
+# ⚠️ 2026-07-28 — the F2 leg defect, again, on the arms. F2 gated the blanket root fold off
+# the legs by HEIGHT, which the arms escape entirely: they hang beside the torso and share
+# its z range. Measured on the shipped rig: hand_L max 0.436, hand_R 0.443, and NOT ONE
+# vertex majority-owned by either hand bone — bound but unposeable.
+# Height cannot separate an arm from the ribs, so the gate is DISTANCE TO THE ARM CHAIN,
+# using the same segments and radii the arm bones are built from.
+gated_verts = 3867
+before = { hand_L_max = 0.436, hand_R_max = 0.443, majority_owned = 0 }
+after  = { hand_L_max = 0.852, hand_R_max = 0.874, majority_owned = "152 / 171" }
+posed  = { lower_arm_35deg = "1.73 -> 3.12 %H", hand_35deg = "0.44 -> 0.81 %H", torso_bleed = 0.0 }
+
+# ── MOUTH POLISH (2026-07-28) ────────────────────────────────────────────────
+[shapes.lip_amplitude]
+# The jaw is capped at 10 deg by the shirt collar, so how far the lips PART is set in
+# shape_author.py, not by the rig. These were 0.012H / 0.010H — chosen while the lip rim was
+# still welded, when no amplitude could move the lip edge at all and the numbers only had to
+# look sane. With the rim freed they became the real ceiling.
+lip_up   = 0.024    # was 0.012
+lip_down = 0.020    # was 0.010
+corner_up   = 0.009
+corner_down = 0.008
+lip_driven_aperture = { before = 1.18, after = 2.35, unit = "%H at full upperUp+lowerDown" }
+cavity_edge_stretch = 1.18          # rig accepts 3.85; zero edges over 2x
+# ⚠️ 3x WAS REJECTED BY THE RENDER, NOT BY THE NUMBERS. It measured 3.52%H aperture at 1.27x
+# stretch — still safe — but the upper lip lifted far enough to drag the muzzle pad and the
+# whole face distorted. The mesh limit and the character limit are not the same limit.
+
+[mouth_parts.teeth_scallop]
+# The band is one swept solid, so it read as a continuous ridge of enamel rather than teeth.
+# A raised cosine along the arc, one period per tooth, scallops the crown — discrete tips,
+# no topology change, still a closed solid at 4 verts per ring.
+teeth_n   = 7
+teeth_cut = 0.34    # crown drop at a gap, as a fraction of tooth height (0 = flat band)
+note = "26 points per arch over 7 teeth is ~3.7 samples per scallop — coarse. It reads at the aperture the 2x lips now open, but this is the sampling ceiling without more ring points."
+[mouth_parts.tongue]
+# 2026-07-29 — replaced the UV sphere. See BUILD_LOG "Tongue (2026-07-29)".
+# EVERY dimension is a fraction of MEASURED room: bag_at(f) samples the cavity walls per
+# station, so the tongue keeps fitting if mouth_open's pocket changes. Nothing here is a
+# hard-coded size.
+stations   = 15     # root -> tip
+ring       = 16     # points around each station (+2 pole caps)
+verts      = 242    # was 146
+fill_lat   = 0.62   # of the local bag half-width
+fill_up    = 0.58   # of the local bag height
+floor_off  = 0.0010
+ceil_off   = 0.0022
+lip_clear  = 0.0012 # dorsum ducks this far under the LOWER LIP EDGE (not the bag ceiling)
+tip_clear  = 0.0040 # stand-off from the lingual face of the lower incisors
+under      = 0.24   # share of section height below the section centre
+groove     = 0.20   # midline dorsal groove, fraction of local height
+section_n  = 2.5    # cross-section superellipse exponent
+tip_rise   = 0.16
+smooth_shaded = true   # per-face, so the teeth keep their facets
+fills_bag  = { lat = 58, fwd = 75, z = 55, unit = "% of bag extent, was 36/52/26" }
+# THE DORSUM DUCKS UNDER THE LIP EDGE, and that is measured, not stylistic. A ray scan of the
+# sealed head found a PINHOLE at z [+0.22448,+0.22484] (0.037%H tall) and the first build put
+# a vertex in it. The scan also gave the shape of the constraint:
+#   station f < 0.055 -> highest contained z +0.2320 (rays hit the palate)
+#   station f > 0.055 -> highest contained z +0.2244 (rays reach the lip slit)
+sightline_pinhole = { z_lo = 0.22448, z_hi = 0.22484, height_pct_h = 0.037 }
+# Thickness comes from the BAG's room; the ceiling only CLIPS the result. Deriving thickness
+# from the already-clamped ceiling counted every restriction twice and collapsed the blade
+# 2.13%H -> 0.63%H between two adjacent stations (a cliff, not a taper).
+# Tip profile holds 0.38, not 0.17: tapering to a needle made the pole cap a SPEARHEAD.
+note = "13x12 and a 0.17 tip were the first build; both were wrong and are recorded in BUILD_LOG rather than silently replaced."
+
+[shapes.tongue_out]
+# tongueOut is a DEFORMATION, not a rigid slab, and its travel is MEASURED every build.
+# The old version translated the whole tongue by a hard-coded 0.048H reasoned from the TEETH
+# INSET (0.030) rather than from where the tongue sat — 4.80%H of travel against a 9.31%H
+# gap, finishing 5.29%H SHORT of the lip plane. It could never protrude.
+protrude    = 0.032   # of H, BEYOND the measured tip->lip gap
+root_hold   = 0.12    # travel retained at the root (0 = pinned, 1 = rigid slab)
+narrow      = 0.22    # lateral pinch at full extension — an extended tongue narrows
+tip_vs_lip  = { before = -5.29, after = 1.71, unit = "%H, positive = past the lip plane" }
+lip_open    = { lower_du = -0.020, upper_du = 0.011 }  # widened; the tip was past the lip and still barely read from the front
+
+[rig.viseme_distinguishability]
+# 2026-07-29, tools/viseme_distinct.py — MEASURED FOR THE FIRST TIME.
+# The pack had always asked "does each viseme render" and never "can a viewer TELL THEM
+# APART". RMS displacement over the 4264-vert mouth region between every pinned pair.
+tool           = "tools/viseme_distinct.py"
+region_verts   = 4264
+median_sep     = 0.58   # %H
+min_sep        = 0.17
+max_sep        = 1.79
+threshold      = 0.25   # below this the difference is at the level of shading noise
+pairs_below    = 3      # of 105
+dead_visemes   = []     # every viseme moves at least 0.25%H
+# ⚠️ THE CONSONANTS COLLAPSE TOWARD SILENCE. Vowels separate fine (aa travels 1.73%H and is
+# 1.79%H from PP); the jaw and lips carry them. But:
+collapsed = [
+  { pair = "DD/kk",  sep = 0.17, why = "tongue-tip vs tongue-back" },
+  { pair = "CH/RR",  sep = 0.23, why = "tongue position" },
+  { pair = "SS/nn",  sep = 0.25, why = "tongue position" },
+  { pair = "sil/FF", sep = 0.25, why = "lower-lip-to-upper-teeth — 'f/v' is the same shape as saying nothing" },
+]
+# Every collapsed pair is a TONGUE-position or lip-to-teeth distinction, and the new tongue
+# has exactly ONE morph (tongueOut) — it cannot go tip-up, back-up or tuck. Consequence,
+# stated plainly: a talking demo on these visemes reads as a cow mouthing vowels.
+root_cause = "one tongue morph; no articulation"
+# ── RESOLVED 2026-07-29 by [shapes.tongue_articulation] below ────────────────
+after = { pairs_failing = 0, rms_median = 0.65, rms_min = 0.28, p95_median = 1.54, p95_min = 0.51 }
+after_pairs = [
+  { pair = "DD/kk",  before = 0.17, after = 0.35 },
+  { pair = "sil/FF", before = 0.25, after = 0.45 },
+  { pair = "CH/RR",  before = 0.23, after = 0.29 },
+  { pair = "SS/nn",  before = 0.25, after = "off the closest list; SS travel 0.28 -> 0.45" },
+]
+# TWO METRICS, because RMS alone is not a fair judge. RMS over a FIXED region is dominated by
+# how MANY verts move: a jaw drop moves thousands a little and scores high, a sibilant's
+# spread lips move ~230 a lot and score low though a viewer reads it instantly. P95 is the
+# 95th-percentile per-vertex displacement — "is there a distinct LOCAL feature". A pair is
+# only called indistinguishable when it fails BOTH.
+metrics = ["RMS (global similarity)", "P95 (local feature)"]
+p95_threshold = 0.60
+# ⚠️ NOT EVERY PAIR SHOULD SEPARATE. Lipreading groups phonemes into viseme classes because
+# /p,b,m/ genuinely look alike on a real face, as do /k,g,ng/. The standard is "pairs a human
+# distinguishes should separate", NOT "all 105 separate" — the latter is fitting the metric.
+
+[shapes.tongue_articulation]
+# 2026-07-29 — EXTENSION BEYOND ARKit-52. ARKit ships `tongueOut` and no other tongue
+# control, so these four are additive: the 43 ARKit keys are untouched and a consumer that
+# only knows ARKit ignores them and gets exactly what it had before. Shapes 43 -> 47.
+extension_of  = "ARKit-52"
+additive      = true
+arkit_intact  = true
+shape_count   = 47
+contract_keys = 42          # was 38; vrm_check verifies all of them exist in the VRM
+# EVERY MAGNITUDE IS DERIVED FROM MEASURED HEADROOM, never asserted. The cavity is shallow at
+# the front (the bag converges on the lip slit), so a hard-coded lift that looked right at
+# the root would drive the tip through the palate. Each vertex moves a fraction of ITS OWN
+# distance to the local ceiling; _cavity_ceiling() samples the bag and ducks under the upper
+# teeth, the same windowed sampling mouth_parts.py uses to fit the tongue.
+headroom_max  = 0.0474      # 4.85%H
+clearance     = 0.0020
+tongueUp     = { verts = 177, peak_pct_h = 1.70, fill = 0.85, use = "tip to the alveolar ridge — /d/ /t/ /n/ /l/ /s/" }
+tongueBack   = { verts = 129, peak_pct_h = 2.78, fill = 0.80, use = "velar hump — /k/ /g/" }
+tongueCurl   = { verts = 242, peak_pct_h = 3.46, fill = 0.75, use = "blade raise — postalveolar /sh/ /ch/ /r/" }
+lipTuckLower = { verts = 384, peak_pct_h = 1.94, use = "lower lip behind the upper teeth — /f/ /v/" }
+# CONTAINMENT HELD AT FULL STRENGTH, measured not assumed — raising the tongue toward the
+# palate is exactly the change that pokes through.
+containment_posed = { rest = 0, tongueUp_1 = 0, tongueBack_1 = 0, tongueCurl_1 = 0, all_three_1 = 0, of = 242 }
+containment_note = "tongue visible ONLY when the jaw is open (DD 52/242, TH 87/242) — correct and wanted"
+# TWO WRONG ANSWERS on nn, both caught by the tool and kept here rather than quietly replaced:
+#   jawOpen 0.18 + tongueUp 0.8 + press -> SS/nn 0.25%H (same morph as SS, at the same strength)
+#   jawOpen 0.04 + close 0.75 + press   -> PP/nn 0.19%H — a BILABIAL seal is /m/, not /n/
+# and the weak viseme turned out to be SS, not nn: it travelled 0.28%H because its spread was
+# driven at 0.5. /s/ is one of the most readable shapes on a face; the wide corners ARE the cue.
+
+[gates.known_blind_spots]
+# Three found in two days. The pattern matters more than any single one: the gates test what
+# is CHEAP to test, not the states the character is actually seen in.
+stale_artifacts = { found = "2026-07-28", status = "FIXED — accept.py dates every derived artifact against the mesh it descends from" }
+jaw_angle       = { found = "2026-07-29", status = "FIXED — viseme_sheet.py, present.py and control_surface.py's own set_jaw_open() posed at a literal 22.0 against a 10.0 envelope; all three now read ENVELOPE" }
+rest_only_containment = { found = "2026-07-29", status = "OPEN — lip_seal.py tests REST only; beauty heroes show a tooth sliver breaking the lip at the left commissure in talk_aa and a speck at the right in happy" }
+
+[mesh.pre_existing_defects]
+# Inherited from the Tripo base mesh. VERIFIED identical before and after the tongue work —
+# classified rather than ignored, per the no-reward-hacking law.
+# ── RESOLVED 2026-07-29 by tools/mesh_patch.py ───────────────────────────────
+non_manifold_edges = 0      # was 1
+boundary_edges     = 0      # was 19
+resolved_by = "tools/mesh_patch.py"
+# The 19 boundary edges were the SYMPTOM. The non-manifold edge (v818-v85) carried THREE
+# faces, one of them a triangle of area 7.0e-08 — 0.3% of the median face — stitched across
+# an otherwise open chain. Filling first only ever got 19 -> 5. Order that works:
+#   remove the sliver -> holes_fill -> sweep the wire edge the deletion leaves behind.
+order = ["remove sliver face", "holes_fill", "sweep wire edges"]
+sliver_area = 7.034e-08
+median_face_area = 2.398e-05
+faces = { before = 47178, after = 47179 }
+verts_unchanged = 47280
+# Runs LAST and adds FACES ONLY. body_rig transfers face weights BY VERTEX INDEX and asserts
+# equal counts, so anything that changes vertex count invalidates the entire chain.
+
+[gates.renderer_check]
+# 2026-07-29 — tools/renderer_check.py. THE GATES STOPPED AT THIS PACK'S BOUNDARY and the
+# surface the operator actually looks at is one repo further on.
+tool = "tools/renderer_check.py"
+bundle = "clyffy/interfaces/clyffy-avatar/renderer/dist"
+wired_into_accept = true
+missing_bundle = "WARN, not FAIL — the pack must stay usable standalone"
+# WHAT IT CAUGHT: the built bundle was serving a contract TWO generations stale while every
+# gate here read green. public/ is symlinked to canon (correct); dist/ is a vite build output
+# that had not been rebuilt since 2026-07-28, and dist/ is what the Tauri shell ships.
+found = { vrm = "75197660 vs canon 82054972 bytes", schema = "5006 vs 7696 bytes", jaw_max_deg = "22.0 served vs 10.0 contract", DD_viseme = "{jawOpen, mouthClose} — predates the M5 rewrite" }
+# The renderer CODE was never at fault: main.js fetches the schema at runtime and hardcodes
+# nothing. The seam law held; only the built artifact had drifted.
+method = "mirrors main.js:147-153 — drivenKeys from VISEMES AND PRESETS (both layers, because clearMorphs resets both), resolved against morph-target names parsed from the .glb JSON chunk"
+negative_tested = "against the bundle that was actually shipping: 4 failures, exit 1"
+browser_is_not_the_gate = "chromium headless boots the app but the 82 MB VRM never finishes parsing under software WebGL (stuck at 'loading vrm' through a 400s virtual-time budget)"
+does_not_claim = "that the face LOOKS right — that is the operator's VERIFY gate, POAM A1"
+
+[gates.pose_check]
+# 2026-07-29 — tools/pose_check.py. lip_seal.py's containment gate only ever tested REST, the
+# one pose where the lips are shut and nothing can escape by construction.
+tool   = "tools/pose_check.py"
+states = 30      # rest + 15 visemes + 7 presets + jawOpen sweep + corner shapes alone
+status = "GREEN"
+wired_into_accept = true
+method = "cap the mouth with a membrane across the lip rim, then parity-test inside/outside"
+# Visible-through-the-opening is IRRELEVANT and must be: teeth SHOULD show in an open mouth.
+# The defect is a tooth through the CHEEK or LIP.
+# ⚠️ TWO WRONG TESTS FIRST — recorded so neither is retried:
+rejected_tests = [
+  { method = "signed distance to nearest exterior-skin point", findings = 109, why = "with the mouth open the surface has a hole, so a tongue correctly in the aperture scores outside by up to 5.6%H" },
+  { method = "ray fan + aperture polygon", findings = 1516, why = "the lip rim spans 5.85%H fore-aft and is strongly NON-PLANAR; a fitted plane self-intersects and the even-odd test is meaningless" },
+]
+found = "viseme PP, one upper-tooth vertex — mouthPress 0.7 takes the upper lip BEHIND the incisors. NOT the rolls (halving mouthRollUpper changed nothing); mouthClose actually rescues it. Swept: 0.55/0.60 clean, 0.65 fails. PP press 0.7 -> 0.60."
+
+[pipeline.densify]
+# 2026-07-29 — tools/densify.py. Acts on the conclusion in [shapes.surface_fold]: the lip
+# tear is a topology limit, so add topology.
+tool  = "tools/densify.py"
+runs_after = "eye_open --cut"     # NOT after canonicalize — see below
+cuts  = 1
+reach = 0.070                      # of H, around the operator's op_lip_seam
+verts = { before = 46838, after = 47778 }
+lip_edge = { before = 0.00561, after = 0.00380, ratio_to_global_before = 1.35, ratio_to_global_after = 0.75 }
+# ⚠️ PLACEMENT TOOK THREE ATTEMPTS. Running it after `canonicalize` (the obvious spot) BREAKS
+# THE EYE CUT: reach 0.085 pinched the left dome boundary (degree-4 vertex) and eye_open
+# refused to cut; 0.070 cut but produced 5 connected components instead of 3, and 0.060 still
+# produced 4. eye_open requires EXACTLY 2 eyeball components and SILENTLY skips writing
+# eye_L_center / eye_L_radius / eye_R_center / eye_R_radius otherwise, which then kills
+# face_atlas four stages later with a bare KeyError.
+excludes = ["mouth cavity (cav_src is an INT lineage layer and cannot be interpolated)", "eyeball shells", "eye sockets (withheld by radius)"]
+preserves = "REFUSES TO SAVE if any vertex group loses members — the operator's hand selections are not reproducible"
+op_groups = { op_jaw_region = "369 -> 785 (interpolated)", op_lip_seam = "60 unchanged", eye_L = "585 unchanged", eye_R = "397 unchanged" }
+result = "upper-lip tear substantially reduced at demo framing; small notches remain at both commissures and there is new fine scalloping on the lower lip edge. An improvement, not a cure. Eyelid folds untouched — the sockets are deliberately withheld."
+# ── EYELID DENSIFICATION: TRIED, MEASURED, REJECTED (2026-07-29) ────────────
+eye_mult = 0.0
+eyelid_rejected = true
+eyelid_cost = "+3087 verts (46838 -> 50865 with the lip) at 2.2x eyeball radius"
+eyelid_fold_rate = { eyeBlinkLeft = "0.088 -> 0.092 WORSE", eyeSquintLeft = "0.054 -> 0.060 WORSE", eyeWideLeft = "0.070 -> 0.066 same" }
+eyelid_render = "side by side at identical framing the denser lid is slightly WORSE — the fold resolves into finer, more visible creasing rather than going away"
+eyelid_why = "the LIP was measurably STRETCHED by mouth_open (1.35x the global median edge) and was genuinely short of mesh. The EYELID was never stretched — it folds because a closing eyelid folds. Resolution cannot fix a fold that is not a resolution deficit. Do not assume the two cases are the same problem."
+socket_withholding_was_unnecessary = "the eye CUT has already happened when densify runs; verified boundary 19 (torso hole only), so both pieces are closed"
+
+[rig.body.spine_point]
+# ⚠️ A DENSITY-BIASED RIG, found because the densify exposed it. body_rig.spine_point() used
+# co[m].mean(axis=0) — an unweighted mean over the vertices in a z-slab. That is NOT a
+# geometric centre: it is pulled toward wherever the mesh is finest. The lip sits 0.045H from
+# the neck slab and falls inside it, so 940 new lip loops dragged the neck sample sideways and
+# the SKULL bone with it, and the VRM exported FACING BACKWARDS (-179.79 deg off +Z).
+estimator_before = "mean over slab vertices — DENSITY-BIASED"
+estimator_after  = "midpoint of the slab's fore-aft EXTENT — density-independent"
+proof = { canon = "skull head (-0.0389, 0.0190, 0.2696)", densified = "skull head (-0.0389, 0.0191, 0.2696)" }
+side_effect = "also made the canon export MORE accurate: VRM facing -2.10 deg -> -0.26 deg off +Z"
+caught_by = "vrm_check facing test — the ONLY gate that saw it. 22 humanoid bones, 47 morphs, 3 spring chains and sum(w)=1.000000 all stayed green."
+
+[shapes.surface_fold]
+# ⚠️ DIAGNOSED, FIX TRIED, FIX REJECTED ON THE RENDER. Not open work — a measured dead end.
+# Jagged black notches tear along the upper lip in open-mouth poses. Cause: face normals
+# INVERTING, the surface folding through itself. Previous work measured CAVITY edge stretch
+# (1.18x, fine) and never looked at SKIN normals — the same family of blind spot as the other
+# four in [gates.known_blind_spots].
+measured = { happy = { stretch = 3.69, edges_over_2x = 34, flips = 26 }, aa = { stretch = 3.02, edges_over_2x = 16, flips = 24 }, rest = { stretch = 1.00, flips = 0 } }
+per_shape_alone = { lipTuckLower = 23, mouthUpperUpRight = 22, mouthPucker = 21, mouthUpperUpLeft = 17, mouthFunnel = 15, mouthShrugUpper = 14 }
+stacking = false          # each shape folds ON ITS OWN; combinations are not the cause
+fix_tried = "relax the displacement field over the mesh graph (a fold is its high-frequency component)"
+fix_rejected = true
+why_rejected = "unbounded it drives every fold to zero and takes the shape with it (eyeBlinkLeft 43->0 flips keeping 33% of travel = an eye that no longer closes); peak-restoration made it WORSE (mouthSmileRight 13->25); with an 85% amplitude floor the big shapes refuse to unfold at all, and the rendered before/after was not better"
+root_cause = "TOPOLOGY, not parameters — too few edge loops across the lip to absorb a 2.4%H lift without the surface crossing itself"
+real_fix = "retopology pass adding loops at the lip and eyelid; changes vertex count and therefore rebuilds the whole chain. A scoped job, not a tuning knob."
+note = "MOST FLIPS ARE NOT DEFECTS — a closing eyelid folds because that is what an eyelid does. face_flips() now REPORTS per shape; unfold() is kept, documented and deliberately NOT called."
