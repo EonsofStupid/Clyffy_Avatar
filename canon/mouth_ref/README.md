@@ -15,16 +15,50 @@ Pulled from four operator-supplied reference clips. `MOUTH_TARGET.jpg` is the wo
 
 ## What the reference actually shows (read off the frames, not assumed)
 
-1. **The muzzle is a distinct PINK PAD with visible pores/freckles** — a separate surface from
-   the cream/white fur around it, and from the lip band below it. Scattered darker specks.
-2. **A CREAM LIP BAND sits below the pad** — not pink. The pad does not run into the mouth.
-3. **COW DENTITION, not symmetric arches.** Two prominent upper canines like short tusks at
-   the corners, a long even lower row between them, and a pale dental pad. Cows have no upper
-   incisors; the current build has two mirror-image scalloped bands, which is wrong species.
-4. **Mouth interior reads warm MAROON**, darkest at the commissures.
-5. **The lip line is a SOFT DARK CREASE**, never a hard drawn line (canon also bans ink outlines).
-6. **Wet specular on nose, lip edge and tongue** — noticeably glossier than the surrounding fur.
-7. Open-wide shape is a **wide flat crescent**, not a round hole.
+⚠️ **CORRECTED after finding the wide-open interior frames.** My first pass off the 4-frame
+sample got two things wrong; both are fixed below and the wrong version is named so it is not
+re-adopted.
+
+### Upper jaw
+1. A **cream DENTAL PAD** — one smooth continuous band. Cows have **no upper incisors**, and
+   the reference shows exactly that: a pad, not teeth.
+2. **Two small canines** at the corners of that pad, short square nubs pointing down.
+3. Above it the **pink muzzle pad with visible pores** — scattered darker specks, a distinct
+   surface from both the cream lip band and the white fur.
+
+### Lower jaw
+4. A **cream lower dental ARCH** — continuous, thicker and more prominent than the upper pad,
+   forming a wide U. Small individual nubs are visible only at the far left/right ends.
+
+### Interior
+5. **The upper cavity reads NEAR-BLACK**, with no palate detail — it simply falls off to dark.
+   ❌ *I first wrote "warm maroon". That was wrong.* The maroon/salmon in the frames is the
+   TONGUE and the inner LIP RIM, not the cavity.
+6. The **tongue is a large salmon-pink dome** filling the lower half, with a clear **midline
+   groove** down its centre — matte with a soft SSS glow, NOT glossy.
+
+### Lip structure — the key beauty finding
+7. Three concentric bands, inside to out: **salmon-pink inner lip rim** → **cream/white outer
+   lip band** → **white fur** with visible fur texture at the chin. The lower lip carries a
+   soft pink roll below the teeth.
+8. The lip line is a **soft dark crease**, never a hard drawn line (canon also bans ink outlines).
+9. Open-wide shape is a **wide flat crescent**, not a round hole.
+
+### ⚠️ THIS CONTRADICTS THE SHIPPED TEETH
+10. The build scallops both arches into individual teeth (`TEETH_N = 7`, `TEETH_CUT = 0.34`,
+    added 2026-07-28 because the bands "read as one continuous ridge of enamel"). **The canon
+    reference IS a continuous ridge** — a smooth pad and arch with nubs only at the ends. The
+    scalloping is therefore wrong against canon and should be reconsidered in A7, not defended
+    because it was recent work.
+
+### Lighting
+11. Cool steel-blue rim along one side of the muzzle, warm falloff into the interior — matches
+    the canon grading law below.
+
+### ⚠️ DO NOT TAKE GOGGLE CUES FROM THESE CLIPS
+The reference clips show **brass steampunk goggles**, which is known drift. Canon is **clear
+polycarbonate laboratory safety goggles** (`CANON.md`, operator ruling 2026-07-25). These
+frames are a MOUTH reference only.
 
 ## The canon law this is measured against (`CANON.md` §1)
 

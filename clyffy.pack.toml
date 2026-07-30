@@ -195,7 +195,7 @@ members = ["eye_L","eye_R","mouth bag (cav material)","teeth_upper","teeth_lower
 # FULL HEAD complete 2026-07-26. ARKit-52 = 43 authored + jawOpen (bone) + 8 eyeLook* (bone).
 [shapes]
 blend   = "mesh/canon/shapes/clyffy_v2_shapes.blend"
-count_authored = 43
+count_authored = 47   # ARKit-43 + 4 documented extensions (see [shapes.tongue_articulation])
 arkit_complete = true          # 43 + jawOpen + 8 eyeLook* = 52
 protected_leaks = 0
 # Exceptions to the 1576-vert protect set (match bone-anchored interior membership):
@@ -453,7 +453,7 @@ soft lobes. No topology work was needed: the hoof is a MATERIAL on the distal fa
 blend = "mesh/canon/body/clyffy_v2_body.blend"
 glb   = "mesh/canon/body/clyffy_v2_body.glb"   # glTF intermediate (skins + morphs)
 bones = 32                                      # humanoid + ear/tail multi-segment chains
-shape_keys = 44                                 # Basis + 43 ARKit
+shape_keys = 48   # Basis + 47                                 # Basis + 43 ARKit
 face_weights = "transferred from clyffy_v2_rig.blend by vertex index"
 body_weights = "distance-to-segment falloff, top-4, Σw=1 (bone heat fails on this mesh)"
 head_isolation = "non-face bones zeroed above neck; face_dom kills body bleed on jaw/skull verts"
@@ -848,7 +848,7 @@ order = ["remove sliver face", "holes_fill", "sweep wire edges"]
 sliver_area = 7.034e-08
 median_face_area = 2.398e-05
 faces = { before = 47178, after = 47179 }
-verts_unchanged = 47280
+verts_unchanged = 48220
 # Runs LAST and adds FACES ONLY. body_rig transfers face weights BY VERTEX INDEX and asserts
 # equal counts, so anything that changes vertex count invalidates the entire chain.
 

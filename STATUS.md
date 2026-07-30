@@ -35,7 +35,7 @@ and its sign test was **ill-conditioned at the corners** so some end rings flipp
 (teeth at arch position 1.43, wider than the mouth). Fixed with a shared bite plane, a
 per-point local normal oriented toward the cavity centroid, and an overbite/overjet so the
 teeth actually read. Containment is now a **measured gate** in `lip_seal.py` (15-ray fan):
-0 of 104 / 0 of 96 / 0 of 146 visible at rest. Rollbacks: `.pre-m3`.
+0 of 104 / 0 of 96 / 0 of 146 visible at rest (the tongue is 242 verts since 2026-07-29). Rollbacks: `.pre-m3`.
 
 ### M5, the lip rim, the chin redo, the hands and the gates — ALL DONE, same day.
 * **M5** — viseme table rewritten, 10 → 21 morphs driven, weights scaled to each shape's
@@ -205,8 +205,11 @@ a resolution deficit. Canon was never touched; the shipped defaults reproduce it
 ### Full chain (staged, then promoted only on green)
 ```bash
 # stage into work/<name>/, never straight into mesh/canon
-canonicalize → mouth_open → chin_mass → eye_open --cut → mouth_parts → lip_seal
-  → face_atlas → shape_author → jaw_rig(13°) → body_rig → vrm_export
+canonicalize → mouth_open → chin_mass → eye_open --cut → densify → mouth_parts → lip_seal
+  → face_atlas → shape_author → jaw_rig → body_rig → hoof → mesh_patch → vrm_export
+  # ⚠️ densify and mesh_patch were MISSING from this line until 2026-07-29. jaw_rig's own
+  # ANGDEG default is 22.0 and is a post-build STRESS pose, not the runtime envelope — the
+  # contract is ENVELOPE["jaw"]["max_deg"] = 10.0 in tools/control_surface.py.
 python3 tools/accept.py && python3 tools/vrm_check.py mesh/canon/body/clyffy.vrm
 ```
 Re-render `present.py` heroes and `viseme_sheet.py` after ANY geometry change — they go
@@ -232,7 +235,7 @@ Talk-ready **offline** asset pack: Holstein Clyffy, waist-up, ARKit-52 face, VRM
 
 **Open local voice job only when accept is green and G4–G5 artifacts exist.**
 
-### Gate status (2026-07-27)
+### Gate status (2026-07-27) — ⚠️ SUPERSEDED, see the RESUME block at the top of this file
 
 | # | Status |
 |---|--------|

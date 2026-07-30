@@ -3117,3 +3117,57 @@ First build rendered `avatar — live face pa`, `62212 glTF vert`, `(contract` a
 drawtext's parser consumes the following UTF-8 continuation bytes, silently swallowing real
 characters. Not a width or centring problem — the glyphs were never drawn. **ASCII only in
 drawtext**; the reason is recorded at the `esc()` helper so it is not reintroduced.
+
+## SSOT merge + cleanup (2026-07-29)
+
+Repo is live at `github.com/EonsofStupid/Clyffy_Avatar` (public, source+tools, 116 files /
+77.3 MB). With version control in place the docs had to actually agree with each other, so this
+is an audit pass, not a feature.
+
+### Drift found and corrected
+
+| where | was | now |
+|---|---|---|
+| `clyffy.pack.toml` | `count_authored = 43` | **47** (ARKit-43 + 4 extensions) |
+| `clyffy.pack.toml` | `shape_keys = 44` | **48** (Basis + 47) |
+| `clyffy.pack.toml` | `47280` verts | **48220** |
+| `STATUS.md` chain line | missing `densify` **and** `mesh_patch`; claimed `jaw_rig(13°)` | full 14-stage chain; note that `jaw_rig`'s `ANGDEG = 22.0` is a post-build STRESS pose, not the runtime envelope |
+| `STATUS.md` | `0 of 146` tongue containment | flagged — the tongue is 242 verts since 2026-07-29 |
+| `STATUS.md` | G1–G7 gate table dated 2026-07-27 | marked **SUPERSEDED**, points at the RESUME block |
+| `MAP.md` | 24 tools absent from the map | **every** non-`_` script classified |
+
+### `MAP.md` — every tool classified, none left ambiguous
+
+An unclassified file is indistinguishable from incomplete work, so the tools table now splits
+into **CHAIN** (14 stages, in order) · **GATES** (6) · **CONTRACT/PRESENT/VOICE** · **DIAGNOSTIC**
+(produced a number the SSOT cites) · **SUPERSEDED** (kept for provenance).
+
+**Deliberately did NOT rename the superseded ones** to the `_*.py` probe convention: live code
+and `clyffy.pack.toml` cite `jaw_drive.py`, `head_axis.py`, `stretch_map.py` and `eye_probe.py`
+as the provenance of recorded measurements. Verified those four references are **comments, not
+code calls** — `avatar_drive.py:6` literally says *"Replaces jaw-only flap (tools/jaw_drive.py)"*.
+Tidying a filename at the cost of breaking a provenance link is a bad trade.
+
+### ⚠️ I HAD MISREAD THE REFERENCE — corrected
+
+Finding the wide-open interior frames (dense-sampled at 4 fps, then inspected; a warm-dark
+heuristic I wrote first was picking up the kitchen lighting and had to be thrown away) fixed two
+errors in my own first pass:
+
+* The upper cavity reads **NEAR-BLACK**, not "warm maroon". The maroon is the TONGUE and the
+  inner LIP RIM.
+* **The teeth are a CONTINUOUS cream dental pad + arch** with canine nubs only at the corners.
+  Cows have no upper incisors.
+
+**The second one contradicts shipped work.** On 2026-07-28 I scalloped both arches into
+individual teeth (`TEETH_N = 7`, `TEETH_CUT = 0.34`) precisely because they "read as one
+continuous ridge of enamel". **Canon IS a continuous ridge.** Recorded in A7 as something to
+reconsider against the reference rather than defend because it is recent.
+
+Also recorded: the reference clips show **brass steampunk goggles**, which is known drift —
+canon is clear polycarbonate lab safety goggles. They are a MOUTH reference only.
+
+### POA&M
+A9 added and **VERIFIED** (the repo itself). A8 **unblocked** — operator ruled the web fork lives
+as a branch of `Clyffy_Avatar`, so the renderer being untracked in `clyffy` no longer blocks it.
+A7 rewritten around the corrected reference. Board: **A0 ✅ · A9 ✅ · A1 BUILT · A2–A8 SPEC.**

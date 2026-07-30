@@ -33,32 +33,70 @@ Does not register monorepo crates; Avatar is a character pack + Blender tool cha
 | `mesh/canon/body/present/` | Beauty heroes (Cycles) |
 | `work/voice/` | Local TTS / reference audio (optional) |
 
-## tools/ (pipeline order)
+## tools/ — every non-diagnostic script, classified
 
+**Convention:** `_*.py` are workbench probes (42 of them) — never the product path. The table
+below classifies every OTHER script, because an unclassified file is indistinguishable from
+incomplete work. Names of SUPERSEDED tools are deliberately NOT renamed: live code and
+`clyffy.pack.toml` cite several of them as the provenance of recorded measurements, and
+breaking those citations to tidy a filename would lose more than it gains.
+
+### CHAIN — the 13-stage build, in order
 | Script | Stage |
 |--------|-------|
-| `canonicalize.py` | freeze transform |
-| `mouth_open.py` | lip seam + cavity |
+| `canonicalize.py` | freeze transform (locks FWD 235.1°) |
+| `mouth_open.py` | lip seam + cavity; writes the `cav_src` / `cav_depth` INT lineage |
 | `chin_mass.py` | mandible growth (displacement only — vertex indices preserved) |
-| `eye_open.py` | separate eye domes |
-| `mouth_parts.py` | teeth + tongue |
-| `lip_seal.py` | rest lip seal |
-| `face_atlas.py` | weighted face regions |
-| `shape_author.py` | ARKit shapes |
-| `jaw_rig.py` | jaw / skull / root |
-| `body_rig.py` | VRM-humanoid body + face weights |
-| `hoof.py` | dark cloven hoof material — runs AFTER body_rig (material only, no geometry) |
-| `vrm_export.py` | VRM 1.0 + springs |
-| `spring_bones.py` | used by vrm_export |
-| `control_surface.py` | schema / examples / apply one frame |
-| `avatar_drive.py` | time series + **drive_frames.jsonl** |
-| `present.py` | beauty heroes (Cycles preferred) |
-| `rebuild.sh` | fast verify / schema / optional VRM re-export |
-| `accept.py` | gate checks G3 |
-| `blender_env.sh` | PATH pin for Blender 5.2 |
-| `viseme_sheet.py` | render pinned VISEMES contact sheet |
+| `eye_open.py` | separate eye domes; **needs `--cut`**, validate-only by default; publishes `eye_*_center/radius` |
+| `densify.py` | **lip-skin edge loops** — runs AFTER `eye_open --cut`, skin only (`cav_src` cannot interpolate) |
+| `mouth_parts.py` | teeth + authored tongue (15 stations × 16 ring + 2 poles) |
+| `lip_seal.py` | rest lip seal **+ the rest-pose containment gate** |
+| `face_atlas.py` | weighted face regions (geodesic, bounded by `op_jaw_region`) |
+| `shape_author.py` | 47 shapes = ARKit-43 + 4 documented extensions |
+| `jaw_rig.py` | jaw / skull / root (harmonic solve; bone heat fails on this mesh) |
+| `body_rig.py` | VRM-humanoid body + face weights transferred BY INDEX |
+| `hoof.py` | dark cloven-hoof material — after `body_rig` (material only, no geometry) |
+| `mesh_patch.py` | close the inherited Tripo hole — LAST, adds faces only |
+| `vrm_export.py` | VRM 1.0 + springs. **SEGFAULTS ON EXIT after writing a valid file** — check the output, not the exit code |
+| `spring_bones.py` | used by `vrm_export` |
 
-Diagnostic `_*.py` helpers are workbench probes — not the product path.
+### GATES — nothing promotes without these
+| Script | Checks |
+|--------|--------|
+| `accept.py` | the umbrella gate: 27 checks incl. artifact freshness, a TOML parse of the SSOT, posed containment, and the cross-repo live-bundle check |
+| `vrm_check.py` | VRM 1.0 conformance, humanoid bones, morph targets, **facing measured from the EYE bones**, every contract morph key present |
+| `pose_check.py` | posed containment across 30 states — caps the mouth, then parity-tests inside/outside |
+| `renderer_check.py` | the LIVE renderer bundle is the current face + contract (crosses the repo boundary) |
+| `viseme_distinct.py` | are the visemes actually distinguishable — RMS **and** P95 |
+| `lip_seal.py` | (also a chain stage) rest-pose containment |
+
+### CONTRACT · PRESENTATION · VOICE
+| Script | Owns |
+|--------|------|
+| `control_surface.py` | **drive contract v1** — the SEAM. Emits the schema every renderer reads |
+| `avatar_drive.py` | audio → time series + `drive_frames.jsonl` + muxed mp4 |
+| `present.py` | beauty heroes (Cycles on GB10) |
+| `viseme_sheet.py` | pinned-VISEME contact sheet (G4) |
+| `tongue_sheet.py` | mouth closeups + an isolated pass with the head hidden |
+| `demo_reel.sh` | self-contained demo mp4 with a **provenance card** read from the artifacts |
+| `voice_tts.py` | local OuteTTS + WavTokenizer (Phase V) |
+| `rebuild.sh` · `blender_env.sh` | fast verify / schema / optional VRM re-export · Blender 5.2 PATH pin |
+
+### DIAGNOSTIC — produced a recorded number; cited by the SSOT, not run in the chain
+| Script | Produced |
+|--------|----------|
+| `eye_probe.py` | the socket-rim + lid-closure finding (cited in `pack.toml`, `eye_open.py`) |
+| `head_axis.py` | the 3D bilateral-symmetry solve → 233.75° candidate (cited in `pack.toml`) |
+| `stretch_map.py` | `max_edge_stretch = 3.85` (cited in `pack.toml`) |
+
+### SUPERSEDED — kept for provenance, NOT the product path
+| Script | Superseded by | Why kept |
+|--------|---------------|----------|
+| `jaw_drive.py` | `avatar_drive.py` | `avatar_drive.py:6` cites it explicitly as what it replaced |
+| `find_axis.py` · `calibrate_axis.py` | `canonicalize.py` | the lineage that established FWD = 235.1°, now a locked canon value |
+| `mouth_cut.py` · `mouth_cut2.py` · `mouth_cut3.py` | `mouth_open.py` | three attempts at the cavity before the ring-expansion approach worked |
+| `jaw_test.py` · `jaw_test2.py` · `jaw_v2.py` · `jaw_v3.py` | `jaw_rig.py` | rig iterations; `jaw_rig` is the harmonic solve that shipped |
+| `overlay.py` · `blender_inspect.py` | — | ad-hoc inspection helpers |
 
 ## pack.toml sections → meaning
 

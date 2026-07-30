@@ -145,18 +145,33 @@ Rollbacks: `.pre-m2`, `.pre-m3`, `.pre-lips`, `.pre-hoof`, `.pre-polish`, `.pre-
 - **Why every gate stayed green:** every measurement this week asked *"does it break?"* — none
   asked *"is it beautiful?"* Correctness and beauty are orthogonal and I let the measurable one
   crowd out the one the operator kept asking for.
+- **THE REFERENCE IS READ, NOT GUESSED.** `canon/mouth_ref/` now carries the wide-open
+  interior frames, and they correct two things I got wrong on a first pass:
+  * The upper cavity reads **NEAR-BLACK**, not "warm maroon" (my first read). The maroon is the
+    TONGUE and the inner LIP RIM.
+  * **The teeth are a CONTINUOUS cream dental pad + arch**, with small canine nubs only at the
+    corners. Cows have no upper incisors.
+- **⚠️ THAT CONTRADICTS SHIPPED WORK, and the shipped work is probably wrong.** On 2026-07-28 I
+  scalloped both arches into individual teeth (`TEETH_N = 7`, `TEETH_CUT = 0.34`) because they
+  "read as one continuous ridge of enamel". **Canon IS a continuous ridge.** Reconsider the
+  scallop against the reference; do not defend it because it is recent.
 - **Build, in impact order:**
-  1. **Split the materials** — muzzle pad (pink, pored) · lip band (cream) · fur/skin · mouth
-     interior (warm maroon) · dental pad · teeth · tongue. Pure material work, no geometry risk.
-  2. **SSS** on muzzle/lip/fur per the canon law. This alone is the plastic-to-flesh change.
-  3. **Roughness variation** — wet lip edge, nose and tongue against matte fur.
-  4. **Gum / dental pad** so the teeth emerge from something instead of floating.
-  5. **COW DENTITION** — reference shows two prominent upper canines + an even lower row + a
-     pale dental pad. The build has two mirror-image scalloped bands, which is the wrong
-     species. Cows have no upper incisors.
-  6. **Beauty-grade lighting** (operator, earlier: *"lighting is proof-grade, not beauty-grade"*).
-  7. Consider the canon default: *"tongue frequently protruding (goofy default)"* — currently
+  1. **Split the materials** — muzzle pad (pink, pored) · **salmon inner lip rim** · **cream
+     outer lip band** · fur/skin · near-black cavity · cream dental pad + arch · tongue. Three
+     concentric lip bands is the structure the reference shows. Pure material work, no geometry risk.
+  2. **SSS** on muzzle / lip / fur per the canon law. This alone is the plastic-to-flesh change.
+  3. **Roughness variation** — wet nose and lip edge; the **tongue is MATTE with SSS glow, not
+     glossy** (another thing the frames settle).
+  4. **Tongue midline groove** — already built (`T_GROOVE = 0.20`) and the reference confirms it.
+     Verify it reads at demo framing rather than re-deriving it.
+  5. **Dental pad / gum** so the arches emerge from something instead of floating.
+  6. **Re-examine the scallop** (see above).
+  7. **Beauty-grade lighting** — cool steel-blue muzzle rim + warm interior falloff, which is
+     the canon grading law already written in `CANON.md` §1.
+  8. Consider the canon default: *"tongue frequently protruding (goofy default)"* — currently
      fully contained at rest.
+- **⚠️ THE REFERENCE CLIPS CARRY GOGGLE DRIFT.** They show **brass steampunk** goggles; canon is
+  **clear polycarbonate lab safety** goggles. Take MOUTH cues only.
 - **VERIFY:** A/B render at demo framing against `canon/mouth_ref/MOUTH_TARGET.jpg`; operator
   confirms it reads as beautiful. Every baseline gate still green (materials must not move
   geometry, so containment and pose_check should be untouched — that is also a check).
@@ -168,7 +183,10 @@ Rollbacks: `.pre-m2`, `.pre-m3`, `.pre-lips`, `.pre-hoof`, `.pre-polish`, `.pre-
 - **Operator rulings 2026-07-29:** scope = **chrome + claymorphic character** (UI restyle AND a
   clay/toon shader variant on the avatar, not just CSS); isolation = **git worktree** off the
   renderer.
-- **⚠️ BLOCKED — THE RENDERER IS NOT IN GIT.** `interfaces/clyffy-avatar/` is UNTRACKED (`??`)
+- **✅ UNBLOCKED 2026-07-29 — operator created `Clyffy_Avatar` and ruled the fork lives HERE**,
+  as a branch off this repo, not off the clyffy monorepo. The renderer being untracked in
+  `clyffy` therefore no longer blocks anything. Original blocker kept for the record:
+- **⚠️ was BLOCKED — THE RENDERER IS NOT IN GIT.** `interfaces/clyffy-avatar/` is UNTRACKED (`??`)
   with ZERO commits touching it. A worktree checks out committed state, so it cannot fork what
   was never committed. This also means **the verified-working live surface has no rollback at
   all**, unlike every artifact in this pack.
@@ -183,7 +201,27 @@ Rollbacks: `.pre-m2`, `.pre-m3`, `.pre-lips`, `.pre-hoof`, `.pre-polish`, `.pre-
 - **VERIFY:** the styled surface renders and responds to a real clyffyd state change using the
   SAME schema as the desktop shell; desktop shell still works unchanged. Operator confirms the
   look. Ideally `renderer_check.py` extended to cover this bundle too.
-- **Status:** SPEC (blocked on the commit). **Depends on:** A1.
+- **Status:** SPEC — **unblocked**, fork lives as a branch of `Clyffy_Avatar`. **Depends on:** A1, A9.
+
+### A9 — The repo is the source of truth (DONE 2026-07-29)
+- **Objective:** this pack under version control, publicly, without publishing what should not be.
+- **Done:** `github.com/EonsofStupid/Clyffy_Avatar` (public). **116 files, 77.3 MB** — source and
+  tools only. `mesh/` (3.8 GB derived) and `work/` (8.4 GB scratch) gitignored; the pipeline
+  rebuilds `mesh/` from the base mesh. Two voice GGUFs exceed GitHub's HARD 100 MB limit and are
+  excluded by the same rule.
+- **Withheld from a PUBLIC repo, deliberately rather than by omission:**
+  * `canon/CLYFFY/` + `canon/docs/` — show-bible art (restore with `./pull-canon.sh`)
+  * `canon/_MASTER_REGISTRY.md` — element tokens for **all eleven** show characters, most unreleased
+  * higgsfield element-token UUIDs and the voice corpus token, **redacted in place** in `CANON.md`,
+    `MAP.md`, `STATUS.md`, `BUILD_LOG.md`, `clyffy.pack.toml`. They are account-scoped resource
+    IDs, not credentials — but public git history cannot be withdrawn. Values survive locally in
+    the gitignored files.
+- **Verified before pushing:** 0 files >50 MB · no credential patterns · `CLYFFY_CONNECTOME_PASS`
+  present only as a NAME with a rotate-me note, never a value · 0 residual token bytes in the
+  pushed tree.
+- **`.pre-*` rollback siblings are now redundant** — git replaces that scheme and they are
+  gitignored. They stay on disk locally.
+- **Status:** **VERIFIED** (pushed, remote confirmed clean of all four tokens).
 
 ### A6 — Pack v0.2 freeze
 - **Objective:** a re-frozen, documented pack reflecting everything since `0.1.0-talk-ready`.
@@ -197,7 +235,7 @@ Rollbacks: `.pre-m2`, `.pre-m3`, `.pre-lips`, `.pre-hoof`, `.pre-polish`, `.pre-
 
 ## Sequence
 
-**A0 ✅ → A1 (BUILT) → A7 (mouth beauty — operator priority) · A8 (web fork, parallel) → A2 · A3 → A4 → A5 → A6**
+**A0 ✅ · A9 ✅ → A1 (BUILT) → A7 (mouth beauty — operator priority) · A8 (web fork, parallel) → A2 · A3 → A4 → A5 → A6**
 
 A1 first because it is a *silent* defect: everything in this pack is green while the thing on
 the operator's screen is a day-old face. A2 is operator-blocked and can run alongside. A3 is
