@@ -57,7 +57,21 @@ for o in list(bpy.data.objects):
     if o.type in ("LIGHT", "CAMERA"):
         bpy.data.objects.remove(o, do_unlink=True)
 
-# ── material polish ───────────────────────────────────────────────────────────
+# ── material polish — SUPERSEDED by tools/materials.py ────────────────────────
+# This function sets SSS, roughness and cavity colour at RENDER time, in RAM, and never saves.
+# That made every hero PNG show subsurface the delivered VRM did not have: the renders were
+# flattering the build, and it is why "SSS = 0.0 on all five materials" went unnoticed for a
+# week while the pictures looked fine.
+#
+# `tools/materials.py` now authors all of that INTO the mesh, where it is the artifact's own
+# property and exports. So this is kept only to render blends from BEFORE that stage — which
+# makes the A/B honest, since the "before" side is exactly what the operator has been looking
+# at. When the mesh carries authored materials it must stand down, or it would overwrite them
+# with its own cruder constants.
+def has_authored_materials() -> bool:
+    return "muzzle_tint" in me.color_attributes
+
+
 def polish_materials():
     for m in me.materials:
         if not m or not m.use_nodes:
@@ -106,8 +120,12 @@ def polish_materials():
             set_in(bsdf.inputs.get("Sheen Weight") or bsdf.inputs.get("Sheen"), 0.18)
             set_in(bsdf.inputs.get("Sheen Roughness"), 0.4)
 
-polish_materials()
-print("materials polished (SSS / teeth / cavity)")
+if has_authored_materials():
+    print("materials: AUTHORED in the mesh (muzzle_tint present) — render-time polish stands down")
+else:
+    polish_materials()
+    print("materials: polished at RENDER TIME (legacy path — this blend predates "
+          "tools/materials.py, so these values are NOT in the delivered artifact)")
 
 # ── world + lights (canon palette) ────────────────────────────────────────────
 sc = bpy.context.scene

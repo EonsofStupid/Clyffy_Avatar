@@ -122,6 +122,58 @@ def main() -> int:
     else:
         ok(f"all {len(driven)} driven contract keys resolve to a morph target")
 
+    # ── vertex colour must be in COLOR_0, the only slot a consumer reads ─────
+    # tools/materials.py carries the muzzle and lip bands as a per-vertex tint. The VRM addon
+    # exports a uniform-white dummy COLOR_0 and puts the real data in COLOR_1, which glTF and
+    # three.js both ignore — so an unrepaired file renders the OLD white muzzle on the live
+    # surface while Blender shows the new one. tools/vrm_color0_fix.py repairs it inside
+    # vrm_export; this is the gate that proves the repair actually happened.
+    # Reads the actual vertex DATA, not the accessor metadata: Blender writes no min/max for
+    # colour accessors (verified — every COLOR_n here has min=None, max=None), so a check based
+    # on metadata would call a uniform-white dummy "real data" and pass every time.
+    # The decoder is imported from vrm_color0_fix rather than reimplemented, so the gate and the
+    # repair can never disagree about what the file says.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import vrm_color0_fix as vcf
+
+    _ver, g, binc, _others = vcf.read_glb(vrm)
+    tinted = white = extra = 0
+    for mesh in g.get("meshes", []):
+        for prim in mesh.get("primitives", []):
+            at = prim.get("attributes", {})
+            if "COLOR_0" not in at:
+                continue
+            rows = vcf.accessor_rows(g, binc, at["COLOR_0"])
+            if vcf.is_white_dummy(rows):
+                white += 1
+            else:
+                tinted += 1
+            extra += sum(1 for k in at if k.startswith("COLOR_") and k != "COLOR_0")
+    # Is a tint EXPECTED? tools/materials.py writes materials_report.json next to the canon
+    # body; its presence is the signal. Without it this is a pre-materials build and demanding
+    # COLOR_0 would be a false alarm.
+    mat_report = ROOT / "mesh/canon/body/materials_report.json"
+    expected = mat_report.is_file()
+    if expected:
+        try:
+            expected = bool(json.loads(mat_report.read_text()).get("requires_color0"))
+        except Exception as e:
+            bad(f"materials_report.json unreadable ({e})")
+            expected = False
+
+    if extra:
+        bad(f"{extra} redundant COLOR_n stream(s) beyond COLOR_0 — a consumer reads COLOR_0 and "
+            f"would miss the tint; run tools/vrm_color0_fix.py")
+    elif tinted:
+        ok(f"COLOR_0 carries real vertex colour on {tinted} primitive(s) "
+           f"({white} constant-material primitive(s) correctly uniform)")
+    elif expected:
+        bad("materials_report.json says this pack carries a muzzle tint, but no primitive has "
+            "varying COLOR_0 — the tint is a NO-OP in this VRM; run tools/vrm_color0_fix.py")
+    else:
+        print("  --   no vertex colour in this VRM, and no materials_report.json — this build "
+              "predates tools/materials.py, so the muzzle carries no tint (not a failure yet)")
+
     # The extension morphs are the reason this check was worth writing — a bundle that
     # predates them loads fine and simply never moves the tongue.
     ext = sorted({"tongueUp", "tongueBack", "tongueCurl", "lipTuckLower"} & driven)

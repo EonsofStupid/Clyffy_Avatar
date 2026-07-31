@@ -35,13 +35,13 @@ Does not register monorepo crates; Avatar is a character pack + Blender tool cha
 
 ## tools/ — every non-diagnostic script, classified
 
-**Convention:** `_*.py` are workbench probes (42 of them) — never the product path. The table
+**Convention:** `_*.py` are workbench probes (45 of them) — never the product path. The table
 below classifies every OTHER script, because an unclassified file is indistinguishable from
 incomplete work. Names of SUPERSEDED tools are deliberately NOT renamed: live code and
 `clyffy.pack.toml` cite several of them as the provenance of recorded measurements, and
 breaking those citations to tidy a filename would lose more than it gains.
 
-### CHAIN — the 13-stage build, in order
+### CHAIN — the 15-stage build, in order
 | Script | Stage |
 |--------|-------|
 | `canonicalize.py` | freeze transform (locks FWD 235.1°) |
@@ -56,9 +56,11 @@ breaking those citations to tidy a filename would lose more than it gains.
 | `jaw_rig.py` | jaw / skull / root (harmonic solve; bone heat fails on this mesh) |
 | `body_rig.py` | VRM-humanoid body + face weights transferred BY INDEX |
 | `hoof.py` | dark cloven-hoof material — after `body_rig` (material only, no geometry) |
-| `mesh_patch.py` | close the inherited Tripo hole — LAST, adds faces only |
+| `mesh_patch.py` | close the inherited Tripo hole — adds faces only |
+| `materials.py` | **muzzle pad + lip bands + SSS + roughness.** Colour and surface response ONLY — asserts vertices, faces, shape keys and every vertex group are byte-identical. After `mesh_patch` (which changes face indices), before `vrm_export`. Writes `materials_report.json` |
 | `vrm_export.py` | VRM 1.0 + springs. **SEGFAULTS ON EXIT after writing a valid file** — check the output, not the exit code |
 | `spring_bones.py` | used by `vrm_export` |
+| `vrm_color0_fix.py` | used by `vrm_export` — promotes the real vertex colours into `COLOR_0`. The VRM addon emits a uniform-white dummy `COLOR_0` and hides the data in `COLOR_1`, which every glTF consumer ignores; without this the authored muzzle tint is a silent NO-OP in the delivered file |
 
 ### GATES — nothing promotes without these
 | Script | Checks |
@@ -66,7 +68,7 @@ breaking those citations to tidy a filename would lose more than it gains.
 | `accept.py` | the umbrella gate: 27 checks incl. artifact freshness, a TOML parse of the SSOT, posed containment, and the cross-repo live-bundle check |
 | `vrm_check.py` | VRM 1.0 conformance, humanoid bones, morph targets, **facing measured from the EYE bones**, every contract morph key present |
 | `pose_check.py` | posed containment across 30 states — caps the mouth, then parity-tests inside/outside |
-| `renderer_check.py` | the LIVE renderer bundle is the current face + contract (crosses the repo boundary) |
+| `renderer_check.py` | the LIVE renderer bundle is the current face + contract (crosses the repo boundary); also that `COLOR_0` carries the real tint, reading vertex DATA because colour accessors have no `min`/`max` to check |
 | `viseme_distinct.py` | are the visemes actually distinguishable — RMS **and** P95 |
 | `lip_seal.py` | (also a chain stage) rest-pose containment |
 
@@ -75,7 +77,7 @@ breaking those citations to tidy a filename would lose more than it gains.
 |--------|------|
 | `control_surface.py` | **drive contract v1** — the SEAM. Emits the schema every renderer reads |
 | `avatar_drive.py` | audio → time series + `drive_frames.jsonl` + muxed mp4 |
-| `present.py` | beauty heroes (Cycles on GB10) |
+| `present.py` | beauty heroes (Cycles on GB10). Its render-time `polish_materials()` is SUPERSEDED by `materials.py` and stands down automatically when the mesh carries authored materials — it only runs for blends that predate that stage, which is what keeps the A/B honest |
 | `viseme_sheet.py` | pinned-VISEME contact sheet (G4) |
 | `tongue_sheet.py` | mouth closeups + an isolated pass with the head hidden |
 | `demo_reel.sh` | self-contained demo mp4 with a **provenance card** read from the artifacts |
@@ -88,6 +90,9 @@ breaking those citations to tidy a filename would lose more than it gains.
 | `eye_probe.py` | the socket-rim + lid-closure finding (cited in `pack.toml`, `eye_open.py`) |
 | `head_axis.py` | the 3D bilateral-symmetry solve → 233.75° candidate (cited in `pack.toml`) |
 | `stretch_map.py` | `max_edge_stretch = 3.85` (cited in `pack.toml`) |
+| `_matstate.py` | the material state actually SAVED in a blend — found SSS = 0.0 on all five materials, and that `present.py` was adding it at render time only |
+| `_lipbands.py` | that the baked atlas paints the whole muzzle near-white (inner lip vs outer band = 6.9/441), so a material pass has to carry COLOUR, not just SSS |
+| `_refcolor.py` | the reference target colours, as ratios to the fur white point. Absolute sampling is invalid here: the frames are dim and blue-graded, and the image display path auto-levels, so colour cannot be matched by looking |
 
 ### SUPERSEDED — kept for provenance, NOT the product path
 | Script | Superseded by | Why kept |

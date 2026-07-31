@@ -127,55 +127,59 @@ Rollbacks: `.pre-m2`, `.pre-m3`, `.pre-lips`, `.pre-hoof`, `.pre-polish`, `.pre-
 
 ### A7 — MOUTH BEAUTY PASS (operator: "it really needs beauty")
 - **Objective:** the mouth reads as BEAUTIFUL at demo framing, matched to the canon art.
-- **Target:** `canon/mouth_ref/` — operator-supplied reference, ruling *"match the canon art"*.
-  `MOUTH_TARGET.jpg` is the working plate; `v2_7dca9cea_t4.png` is the key frame.
-- **⚠️ THIS IS A CANON VIOLATION, NOT A TASTE QUESTION.** `CANON.md` §1 states
-  *"Subsurface scattering fur/feathers/skin — **NO exceptions**"* and the delivered build has
-  **SSS = 0.0 on all five materials**. Measured 2026-07-29:
+- **✅ STEPS 1–3 DONE AND PROMOTED 2026-07-30** — operator confirmed *"looks good"*.
+  `tools/materials.py` (chain stage 14) authors the muzzle pad, SSS and roughness INTO the mesh.
+  Geometry byte-identical (verts, faces, 48 shape keys, all 51 vertex groups asserted).
+  accept GREEN (27) · vrm_check GREEN · renderer_check GREEN · live bundle refreshed.
 
-  | | measured |
-  |---|---|
-  | materials on head+body | **ONE** (`tripo_mat_dfcde304`, 46909 of 48077 faces) |
-  | lip-specific material | **none** |
-  | gum / palate material | **none** |
-  | SSS | **0.0 everywhere** |
-  | roughness | flat **0.50** across the whole head |
-  | lip rim protrusion | +3.88%H proud of the muzzle (this part is FINE) |
+- **⛔ THE REFERENCE RULE THIS ESTABLISHED — albedo comes from a NEUTRALLY LIT source.**
+  | source | Y_pad/Y_fur | chroma |
+  |---|---|---|
+  | `canon/base_sheet/Clyffy_BASE-NEUTRAL-v1.png` (PRIMARY) | 0.80–0.89 | 1.31 : 0.92 : 0.83 |
+  | `canon/CLYFFY/DPN/Clyffy_Anchor-Standalone-FINAL.png` (cross-check) | 0.63–0.70 | 1.41–1.50 : 0.88 : 0.74 |
+  | delivered render | **0.624** | **1.54 : 0.87 : 0.73** |
+  | ❌ first attempt, off graded video frames | 0.496 | 1.76 : 0.81 : 0.66 |
+  | ❌ …which matches the anchor art's SHADED UNDERSIDE | 0.373 | 1.76 : 0.81 : 0.62 |
 
-- **Why every gate stayed green:** every measurement this week asked *"does it break?"* — none
-  asked *"is it beautiful?"* Correctness and beauty are orthogonal and I let the measurable one
-  crowd out the one the operator kept asking for.
-- **THE REFERENCE IS READ, NOT GUESSED.** `canon/mouth_ref/` now carries the wide-open
-  interior frames, and they correct two things I got wrong on a first pass:
-  * The upper cavity reads **NEAR-BLACK**, not "warm maroon" (my first read). The maroon is the
-    TONGUE and the inner LIP RIM.
-  * **The teeth are a CONTINUOUS cream dental pad + arch**, with small canine nubs only at the
-    corners. Cows have no upper incisors.
-- **⚠️ THAT CONTRADICTS SHIPPED WORK, and the shipped work is probably wrong.** On 2026-07-28 I
-  scalloped both arches into individual teeth (`TEETH_N = 7`, `TEETH_CUT = 0.34`) because they
-  "read as one continuous ridge of enamel". **Canon IS a continuous ridge.** Reconsider the
-  scallop against the reference; do not defend it because it is recent.
-- **Build, in impact order:**
-  1. **Split the materials** — muzzle pad (pink, pored) · **salmon inner lip rim** · **cream
-     outer lip band** · fur/skin · near-black cavity · cream dental pad + arch · tongue. Three
-     concentric lip bands is the structure the reference shows. Pure material work, no geometry risk.
-  2. **SSS** on muzzle / lip / fur per the canon law. This alone is the plastic-to-flesh change.
-  3. **Roughness variation** — wet nose and lip edge; the **tongue is MATTE with SSS glow, not
-     glossy** (another thing the frames settle).
-  4. **Tongue midline groove** — already built (`T_GROOVE = 0.20`) and the reference confirms it.
-     Verify it reads at demo framing rather than re-deriving it.
+  The first attempt measured off `canon/mouth_ref/` video frames — one is a blue night scene
+  where white fur is (113,160,217) — and the samples landed on SHADED muzzle, which became the
+  albedo of the whole pad: 40% too dark, 35% too saturated, an orange rubber look. Compounding
+  it, the image display path auto-levels, so the frames *display* pink while the pixels say
+  mauve. **Colour cannot be judged by looking; it must be measured against a neutral reference.**
+
+- **⛔ NO LIP BANDS — deleted, do not reintroduce.** The mouth is a slit in one continuous pad.
+  The earlier "three concentric bands (salmon inner rim → cream outer band → fur)" is HUMAN
+  vermilion-border anatomy, appears on neither canon source, and was **never measured** — I wrote
+  it as prose into `canon/mouth_ref/README.md` off a low-res plate and then served it with careful
+  measurement. Operator: *"stop trying to human mouth this."* `lip_bands = false` in the pack.
+
+- **A silent no-op caught at the export boundary.** The VRM addon emits a uniform-white dummy
+  `COLOR_0` and hides the real vertex colours in `COLOR_1`, which glTF and three.js both ignore —
+  Blender would render the pink muzzle while the live surface kept the old white one, every gate
+  green. `tools/vrm_color0_fix.py` repairs it inside `vrm_export`; `renderer_check.py` gates it by
+  reading vertex DATA (colour accessors carry no `min`/`max`, so a metadata check always passes).
+
+- **RESIDUALS, stated not hidden:**
+  * Pad is ~17% more saturated and ~25% darker than the neutral sheet. Saturation is SSS pushing
+    red (albedo 1.31 in → 1.54 rendered); darkness is the light rig. Operator accepted as-is.
+  * The pad boundary is a smooth airbrushed gradient. The reference shows **pore stipple** and
+    **fur feathering over the pad edge**. Texture work, not a tint — not attempted.
+  * A float attribute drives roughness/SSS, which does NOT survive glTF. The web renderer gets
+    colour (COLOR_0) but not surface response. A format limit, not a bug.
+
+- **STILL OPEN in A7:**
+  4. **Tongue midline groove** — built (`T_GROOVE = 0.20`); verify it reads at demo framing.
   5. **Dental pad / gum** so the arches emerge from something instead of floating.
-  6. **Re-examine the scallop** (see above).
-  7. **Beauty-grade lighting** — cool steel-blue muzzle rim + warm interior falloff, which is
-     the canon grading law already written in `CANON.md` §1.
-  8. Consider the canon default: *"tongue frequently protruding (goofy default)"* — currently
-     fully contained at rest.
-- **⚠️ THE REFERENCE CLIPS CARRY GOGGLE DRIFT.** They show **brass steampunk** goggles; canon is
-  **clear polycarbonate lab safety** goggles. Take MOUTH cues only.
-- **VERIFY:** A/B render at demo framing against `canon/mouth_ref/MOUTH_TARGET.jpg`; operator
-  confirms it reads as beautiful. Every baseline gate still green (materials must not move
-  geometry, so containment and pose_check should be untouched — that is also a check).
-- **Status:** SPEC. **Depends on:** A0. **This is the operator's stated priority.**
+  6. **⚠️ THE SCALLOP — operator's call, evidence now favours reverting.** `TEETH_N = 7`,
+     `TEETH_CUT = 0.34` (added 2026-07-28 because the bands "read as one continuous ridge")
+     renders as a white sawtooth with the mouth open. Canon **is** a continuous ridge: the
+     reference's upper canine (176,158,130) and dental pad (170,151,125) measure as the SAME
+     colour, i.e. no per-tooth differentiation at all. Geometry change on shipped work.
+  7. **Beauty-grade lighting** — would also close the 25% luminance residual above.
+  8. Consider the canon default: *"tongue frequently protruding (goofy default)"*.
+
+- **VERIFY:** ✅ operator confirmed the A/B (`work/mouth_ab/A7_canon_aligned.png`) 2026-07-30.
+- **Status:** STEPS 1–3 DONE. Steps 4–8 open. **Depends on:** A0.
 
 ### A8 — Web surface: neubrutalist / claymorphism (TanStack)
 - **Objective:** a styled web version of the avatar for the operator's TanStack site,
@@ -235,7 +239,7 @@ Rollbacks: `.pre-m2`, `.pre-m3`, `.pre-lips`, `.pre-hoof`, `.pre-polish`, `.pre-
 
 ## Sequence
 
-**A0 ✅ · A9 ✅ → A1 (BUILT) → A7 (mouth beauty — operator priority) · A8 (web fork, parallel) → A2 · A3 → A4 → A5 → A6**
+**A0 ✅ · A9 ✅ · A7 steps 1–3 ✅ → A1 (BUILT) → A7 steps 4–8 (scallop is the operator's call) · A8 (web fork, parallel) → A2 · A3 → A4 → A5 → A6**
 
 A1 first because it is a *silent* defect: everything in this pack is green while the thing on
 the operator's screen is a day-old face. A2 is operator-blocked and can run alongside. A3 is

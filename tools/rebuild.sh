@@ -38,15 +38,24 @@ Full mesh chain (manual / long). Values from clyffy.pack.toml [pipeline]:
   2. mouth_open    → clyffy_v2_open.blend
   3. chin_mass     → clyffy_v2_chin.blend      (M2; eye_open reads THIS, not open)
   4. eye_open      → clyffy_v2_eyes.blend      (needs --cut; default is validate-only)
-  5. mouth_parts   → clyffy_v2_parts.blend
-  6. lip_seal      → (parts in place)
-  7. face_atlas    → clyffy_v2_atlas.blend
-  8. shape_author  → shapes/clyffy_v2_shapes.blend
-  9. jaw_rig       → clyffy_v2_rig.blend       (reference pose 13 deg, from PARTS)
- 10. body_rig      → body/clyffy_v2_body.blend
- 11. vrm_export    → body/clyffy.vrm
- 12. control_surface schema + examples
- 13. avatar_drive / present as needed
+  5. densify       → lip-skin edge loops       (AFTER eye_open --cut; skin only)
+  6. mouth_parts   → clyffy_v2_parts.blend
+  7. lip_seal      → (parts in place)           + rest-pose containment gate
+  8. face_atlas    → clyffy_v2_atlas.blend
+  9. shape_author  → shapes/clyffy_v2_shapes.blend
+ 10. jaw_rig       → clyffy_v2_rig.blend       (22 deg STRESS pose; the contract envelope is 10 deg)
+ 11. body_rig      → body/clyffy_v2_body.blend
+ 12. hoof          → hoof material             (material only, no geometry)
+ 13. mesh_patch    → close the inherited hole   (adds faces only)
+ 14. materials     → muzzle pad / lip bands / SSS  (colour only, asserts geometry unchanged)
+ 15. vrm_export    → body/clyffy.vrm            (runs vrm_color0_fix automatically)
+ 16. control_surface schema + examples
+ 17. avatar_drive / present as needed
+
+ORDER IS LOAD-BEARING, not cosmetic: densify must follow eye_open --cut (it broke the eye cut
+at three reaches when run before it), materials must follow mesh_patch (which changes face
+indices), and anything that changes VERTEX COUNT invalidates body_rig, which transfers face
+weights BY INDEX and asserts equal counts.
 
 vrm_export SEGFAULTS ON EXIT after the VRM is written (Blender teardown, "Found 4
 unreleased ID's"). The file is complete and passes vrm_check — check for the output, not

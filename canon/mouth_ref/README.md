@@ -1,64 +1,85 @@
-# MOUTH BEAUTY TARGET — operator-supplied, 2026-07-29
+# MOUTH REFERENCE — and a correction about how it was used
 
-The beauty target for the mouth pass (POAM **A7**). Operator ruling when asked what to match:
-**"match the canon art"** — so these frames, not my taste, are the spec.
+## ⛔ READ THIS FIRST — THESE FRAMES ARE NOT THE COLOUR REFERENCE
 
-Pulled from four operator-supplied reference clips. `MOUTH_TARGET.jpg` is the working plate.
+The files in this folder are **video frames**, kept for STRUCTURE and MOTION only.
+**Do not take colour off them.** The colour reference is:
 
-| file | what it shows |
+| role | file |
 |---|---|
-| `MOUTH_TARGET.jpg` | the 4-panel working plate — laugh / open smile / closed smile / muzzle closeup |
-| `v2_7dca9cea_t4.png` | **THE key frame** — mouth wide open: interior, dentition, lip band |
-| `v2_7dca9cea_t3.png` | open smile |
-| `v2_7dca9cea_t2.png` | closed smile |
-| `v1_48a464a0_t4.png` | extreme muzzle closeup — pores, lip crease, lower teeth |
+| **PRIMARY (albedo)** | `canon/base_sheet/Clyffy_BASE-NEUTRAL-v1.png` — 5-view turnaround, NEUTRAL lighting |
+| **CROSS-CHECK** | `canon/CLYFFY/DPN/Clyffy_Anchor-Standalone-FINAL.png` — canonical DPN art |
 
-## What the reference actually shows (read off the frames, not assumed)
+Measure with `tools/_refcolor.py`. Authored into the mesh by `tools/materials.py`.
 
-⚠️ **CORRECTED after finding the wide-open interior frames.** My first pass off the 4-frame
-sample got two things wrong; both are fixed below and the wrong version is named so it is not
-re-adopted.
+### Why — this cost a full build cycle
 
-### Upper jaw
-1. A **cream DENTAL PAD** — one smooth continuous band. Cows have **no upper incisors**, and
-   the reference shows exactly that: a pad, not teeth.
-2. **Two small canines** at the corners of that pad, short square nubs pointing down.
-3. Above it the **pink muzzle pad with visible pores** — scattered darker specks, a distinct
-   surface from both the cream lip band and the white fur.
+The frames here are graded, and `v1_48a464a0_t4.png` is a blue night scene where **white fur
+measures sRGB (113,160,217)**. On top of that, the image display path auto-levels every frame it
+renders, so a crop of the muzzle *displays* as bright pink while the pixels say (120,101,137) —
+blue-dominant mauve, confirmed by two independent decoders. **Colour here cannot be judged by
+looking.**
 
-### Lower jaw
-4. A **cream lower dental ARCH** — continuous, thicker and more prominent than the upper pad,
-   forming a wide U. Small individual nubs are visible only at the far left/right ends.
+Worse than the grading: the samples taken off these frames landed on **shaded** muzzle, which was
+then used as the albedo of the whole pad.
 
-### Interior
-5. **The upper cavity reads NEAR-BLACK**, with no palate detail — it simply falls off to dark.
-   ❌ *I first wrote "warm maroon". That was wrong.* The maroon/salmon in the frames is the
-   TONGUE and the inner LIP RIM, not the cavity.
-6. The **tongue is a large salmon-pink dome** filling the lower half, with a clear **midline
-   groove** down its centre — matte with a soft SSS glow, NOT glossy.
+| source | Y_pad/Y_fur | chroma R:G:B |
+|---|---|---|
+| canon base sheet, lit pad | 0.80 – 0.89 | 1.31 : 0.92 : 0.83 |
+| canon anchor art, lit pad | 0.63 – 0.70 | 1.41 – 1.50 : 0.88 : 0.74 |
+| **what these frames gave** | **0.496** | **1.76 : 0.81 : 0.66** |
+| canon anchor art, **shaded underside** | 0.373 | **1.76 : 0.81 : 0.62** |
 
-### Lip structure — the key beauty finding
-7. Three concentric bands, inside to out: **salmon-pink inner lip rim** → **cream/white outer
-   lip band** → **white fur** with visible fur texture at the chin. The lower lip carries a
-   soft pink roll below the teeth.
-8. The lip line is a **soft dark crease**, never a hard drawn line (canon also bans ink outlines).
-9. Open-wide shape is a **wide flat crescent**, not a round hole.
+The built value is a dead match for the *shaded underside*. Result: ~40% too dark and ~35% too
+saturated — an orange rubber pad instead of a soft pink muzzle.
 
-### ⚠️ THIS CONTRADICTS THE SHIPPED TEETH
-10. The build scallops both arches into individual teeth (`TEETH_N = 7`, `TEETH_CUT = 0.34`,
-    added 2026-07-28 because the bands "read as one continuous ridge of enamel"). **The canon
-    reference IS a continuous ridge** — a smooth pad and arch with nubs only at the ends. The
-    scalloping is therefore wrong against canon and should be reconsidered in A7, not defended
-    because it was recent work.
+**Rule: albedo comes from a NEUTRALLY LIT reference. Graded frames are for structure and mood.**
 
-### Lighting
-11. Cool steel-blue rim along one side of the muzzle, warm falloff into the interior — matches
-    the canon grading law below.
+## ⛔ THERE ARE NO LIP BANDS. THE MOUTH IS A SLIT IN THE PAD.
 
-### ⚠️ DO NOT TAKE GOGGLE CUES FROM THESE CLIPS
-The reference clips show **brass steampunk goggles**, which is known drift. Canon is **clear
-polycarbonate laboratory safety goggles** (`CANON.md`, operator ruling 2026-07-25). These
-frames are a MOUTH reference only.
+An earlier version of this file claimed:
+
+> *"Three concentric bands, inside to out: salmon-pink inner lip rim → cream/white outer lip band
+> → white fur"*
+
+**That was wrong and it is deleted.** It describes a HUMAN vermilion border. It is on neither
+canon source. It was never measured — it was written as prose off the low-resolution 4-panel
+plate, and then colour was measured *rigorously in service of it*. Measuring carefully does not
+make the target correct.
+
+Operator, on seeing the render it produced: **"stop trying to human mouth this."**
+
+What both canon sources actually show: **one continuous muzzle pad, with the mouth cut into it.**
+The lips are the pad continuing. The dark lip line is geometry and occlusion, not paint.
+
+## What these frames ARE good for
+
+| file | shows | supplied by |
+|---|---|---|
+| `v1_48a464a0_t4.png` | extreme muzzle closeup — **pore stipple**, fur feathering over the pad edge, lip crease | operator video |
+| `v2_7dca9cea_t4.png` | mouth wide open — interior, dentition, aperture shape | operator video |
+| `v2_7dca9cea_t3.png` | open smile | operator video |
+| `v2_7dca9cea_t2.png` | closed smile | operator video |
+| `MOUTH_TARGET.jpg` · `INTERIOR_TARGET.jpg` · `_ref_grid.jpg` · `_v2_contact.jpg` | working plates I composed from the above | derived |
+
+Structural facts read off them that DID hold up:
+
+1. **The upper cavity reads near-black** — it measures (1,0,0) in `v2_..._t4`. (An earlier note
+   called it "warm maroon"; the maroon is the tongue and inner lip tissue.)
+2. **The teeth are a continuous cream pad and arch**, with canine nubs only at the corners — cows
+   have no upper incisors. Measured: upper canine (176,158,130) and dental pad (170,151,125) are
+   **the same colour**, which is why it reads as one ridge rather than as teeth.
+3. The tongue is a large dome with a midline groove, **matte with an SSS glow, not glossy**.
+4. Open-wide shape is a **wide flat crescent**, not a round hole.
+5. The muzzle pad carries **visible pores** and the fur **feathers over its edge** — still TODO;
+   the current build has a smooth airbrushed pad boundary.
+
+### ⚠️ Two traps in these clips
+
+- **Goggles:** they show **brass steampunk**. Canon is **clear polycarbonate laboratory safety
+  goggles** (`_SPEC.md`, operator ruling 2026-07-25). Known drift baked into the AV art. Take
+  MOUTH cues only.
+- **Grading:** see the top of this file. Structure and motion, never colour.
 
 ## The canon law this is measured against (`CANON.md` §1)
 
@@ -68,5 +89,3 @@ Subsurface scattering fur/feathers/skin — NO exceptions
 Deep teal shadow pools · Electric amber rim light · Cold steel-blue monitor fill
 NO ink outlines · NO cel-shading · NOT 2D cartoon · NOT illustrated/flat
 ```
-
-`CANON.md` also states: **"Broad pink muzzle, tongue frequently protruding (goofy default)."**

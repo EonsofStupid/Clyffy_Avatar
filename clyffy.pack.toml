@@ -57,12 +57,78 @@ atlas      = "mesh/canon/clyffy_v2_atlas.blend"   # tools/face_atlas.py   — we
 shapes     = "mesh/canon/shapes/clyffy_v2_shapes.blend"  # tools/shape_author.py — ARKit-52 blendshapes
 rigged     = "mesh/canon/clyffy_v2_rig.blend"     # tools/jaw_rig.py      — jaw/skull/root only (face proven)
 body       = "mesh/canon/body/clyffy_v2_body.blend"  # tools/body_rig.py — VRM-humanoid + face weights
+# tools/materials.py (stage 14, 2026-07-30) runs IN PLACE on `body`, after mesh_patch and
+# before vrm_export. Muzzle pad + SSS + roughness; colour and surface response ONLY, with a
+# gate asserting vertices, faces, shape keys and all 51 vertex groups byte-identical.
+# Report: mesh/canon/body/materials_report.json
+materials_report = "mesh/canon/body/materials_report.json"
 # Lip rest seal (tools/lip_seal.py) runs on parts BEFORE atlas/shapes so the rest
 # pose does not tunnel-view the teeth. amount=0.85, fwd_bulk=0.0025H, teeth_inset=0.008H.
 # The operator's hand-picked regions live IN the canonical mesh as vertex groups
 # (op_jaw_region 390, op_lip_seam 81), not as raw vertex indices in side .blend files.
 # Indices force every downstream step to preserve numbering exactly; groups do not.
 operator_groups = ["op_jaw_region", "op_lip_seam"]
+
+# ── MATERIALS (tools/materials.py, 2026-07-30) ───────────────────────────────
+# ⛔ ALBEDO IS MEASURED OFF A NEUTRALLY LIT REFERENCE. This is a rule, not a preference:
+# the first version of this stage measured off graded video frames in canon/mouth_ref/, and
+# the samples landed on SHADED muzzle. It produced 0.496 / 1.76:0.81:0.66 — a dead match for
+# the shaded UNDERSIDE of the pad in the canonical art, i.e. 40% too dark and 35% too
+# saturated. Graded frames are for structure and motion. Never for colour.
+[materials]
+reference_primary    = "canon/base_sheet/Clyffy_BASE-NEUTRAL-v1.png"      # neutral turnaround
+reference_crosscheck = "canon/CLYFFY/DPN/Clyffy_Anchor-Standalone-FINAL.png"
+measured_by          = "tools/_refcolor.py"
+
+# Muzzle pad albedo, as a ratio to the FUR (grading-invariant, so it transfers to our render).
+muzzle_chroma = [1.31, 0.92, 0.83]   # luminance-normalised R:G:B, canon sheet, 3 lit samples
+muzzle_ylev   = 0.850                # albedo luminance as a fraction of the fur's
+# Cross-check bracket from the anchor art: chroma 1.41–1.50, Y 0.63–0.70.
+# As RENDERED under the canon light rig: Y 0.624, chroma 1.54:0.87:0.73 — inside the anchor
+# bracket. RESIDUAL, stated not hidden: ~17% more saturated and ~25% darker than the neutral
+# sheet. The saturation is SSS pushing red (albedo 1.31 in -> 1.54 out); the darkness is the
+# light rig. Operator accepted 2026-07-30.
+
+# ⛔ NO LIP BANDS. The mouth is a SLIT IN THE PAD; the lips are the pad continuing, and the
+# dark lip line is geometry and occlusion, not paint. An earlier version painted three
+# concentric bands (salmon inner rim / cream outer band / fur) — that is HUMAN vermilion-border
+# anatomy, is on neither canon source, and was never measured: it was prose I wrote into
+# canon/mouth_ref/README.md and then served with careful measurements. Operator: "stop trying
+# to human mouth this." Do not reintroduce it.
+lip_bands = false
+
+# Pad extent. The LATERAL anchor is EYE SEPARATION, not face width — face width is ambiguous
+# on this character (the mesh measurement included the ears), so "% of face width" meant two
+# different things in the art and in the mesh.
+pad_lateral_anchor = "eye_separation"
+pad_halfwidth_over_eye_sep = 1.160
+pad_top_frac_eye_to_mouth  = 0.172   # pad top, as a fraction of the eye->mouth span
+pad_bottom_geodesic_frac   = 0.086   # below the lip, in the same units; follows the lip curve
+
+# Surface response. SSS radius is in scene units against H = 0.9784.
+sss_fur = 0.15
+sss_pad = 0.45
+sss_radius = [1.0, 0.35, 0.22]
+sss_scale  = 0.004        # 4 mm red mean-free-path
+roughness_fur = 0.55
+roughness_pad = 0.42
+
+# Interior constants: only HUE is rotated onto the measurement; the tuned LUMINANCE is kept,
+# because their in-frame brightness is occlusion rather than albedo and darkening the albedo
+# too would double-count. The cavity is the one level deliberately moved (it reads black).
+tongue_chroma = [2.03, 0.73, 0.60]
+teeth_chroma  = [1.09, 0.99, 0.85]   # canine (176,158,130) == dental pad (170,151,125)
+cavity_chroma = [2.30, 0.60, 0.55]
+cavity_ylev   = 0.060
+
+# The tint rides a per-vertex attribute, NOT a material split: a material holds a constant, so
+# N materials mean N-1 hard seams and CANON.md bans ink outlines / flat looks. It is a RATIO to
+# fur (fur stays exactly 1.0), so the atlas keeps its own pores, shading and Holstein patches.
+vertex_attribute = "muzzle_tint"     # FLOAT_COLOR, POINT domain -> exports as COLOR_0
+# ⚠️ The VRM addon emits a uniform-white dummy COLOR_0 and hides the real data in COLOR_1,
+# which every glTF consumer ignores. tools/vrm_color0_fix.py repairs it inside vrm_export;
+# tools/renderer_check.py gates it. Without that repair the tint is a SILENT NO-OP.
+color0_repair = "tools/vrm_color0_fix.py"
 
 # ── BUILD PARAMETERS (settled by measurement — see BUILD_LOG 2026-07-25) ──────
 # These are the tool defaults. Recorded here so the chain is reproducible and so the

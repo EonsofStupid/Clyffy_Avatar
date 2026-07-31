@@ -206,14 +206,18 @@ a resolution deficit. Canon was never touched; the shipped defaults reproduce it
 ```bash
 # stage into work/<name>/, never straight into mesh/canon
 canonicalize → mouth_open → chin_mass → eye_open --cut → densify → mouth_parts → lip_seal
-  → face_atlas → shape_author → jaw_rig → body_rig → hoof → mesh_patch → vrm_export
+  → face_atlas → shape_author → jaw_rig → body_rig → hoof → mesh_patch → materials → vrm_export
+  # materials (2026-07-30) authors the muzzle pad + SSS + roughness. Colour and surface
+  # response ONLY — it asserts verts/faces/shape-keys/vertex-groups byte-identical. It must
+  # follow mesh_patch, which changes face indices. vrm_export then runs vrm_color0_fix
+  # automatically, without which the tint is a silent no-op in the delivered VRM.
   # ⚠️ densify and mesh_patch were MISSING from this line until 2026-07-29. jaw_rig's own
   # ANGDEG default is 22.0 and is a post-build STRESS pose, not the runtime envelope — the
   # contract is ENVELOPE["jaw"]["max_deg"] = 10.0 in tools/control_surface.py.
 python3 tools/accept.py && python3 tools/vrm_check.py mesh/canon/body/clyffy.vrm
 ```
-Re-render `present.py` heroes and `viseme_sheet.py` after ANY geometry change — they go
-stale silently and `accept.py` only checks that they exist.
+Re-render `present.py` heroes and `viseme_sheet.py` after ANY geometry OR MATERIAL change —
+they go stale silently. `accept.py` does check they are newer than the body blend.
 
 ---
 

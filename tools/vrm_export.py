@@ -322,6 +322,32 @@ if os.path.isfile(OUT):
 else:
     print(f"!! no file at {OUT}")
 
+# ── COLOR_0 repair, ALWAYS, not as an optional follow-up step ─────────────────
+# The VRM addon emits a uniform-white dummy COLOR_0 and puts the real vertex colours in
+# COLOR_1, which every glTF consumer ignores. Left unfixed, the muzzle tint authored by
+# tools/materials.py is a silent no-op in the delivered file while Blender renders it
+# correctly. See tools/vrm_color0_fix.py for the measurements and the ruled-out workarounds.
+# Wired in HERE rather than left as a manual step, because a manual step after a stage that
+# segfaults on teardown is a step that gets skipped.
+if os.path.isfile(OUT):
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    try:
+        import vrm_color0_fix
+        _argv = sys.argv
+        sys.argv = ["vrm_color0_fix", OUT]
+        try:
+            rc = vrm_color0_fix.main()
+        finally:
+            sys.argv = _argv
+        result["color0_fix"] = rc
+        result["size"] = os.path.getsize(OUT)
+        if rc != 0:
+            print(f"!! vrm_color0_fix returned {rc} — COLOR_0 may still be a white no-op")
+    except Exception as e:
+        result["color0_fix"] = f"failed: {e}"
+        print(f"!! vrm_color0_fix failed: {e}")
+        import traceback; traceback.print_exc()
+
 # report assigned humanoid bones + spring bones
 report = {
     "export": result,

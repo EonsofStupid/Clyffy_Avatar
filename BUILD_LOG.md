@@ -3171,3 +3171,132 @@ canon is clear polycarbonate lab safety goggles. They are a MOUTH reference only
 A9 added and **VERIFIED** (the repo itself). A8 **unblocked** — operator ruled the web fork lives
 as a branch of `Clyffy_Avatar`, so the renderer being untracked in `clyffy` no longer blocks it.
 A7 rewritten around the corrected reference. Board: **A0 ✅ · A9 ✅ · A1 BUILT · A2–A8 SPEC.**
+
+## 2026-07-29 — A7 steps 1–3: materials authored (muzzle pad · lip bands · SSS · roughness)
+
+NOT PROMOTED TO CANON. Built and verified on a scratch copy; the operator's beauty verdict on
+`work/mouth_ab/A7_material_ab.png` gates promotion.
+
+**Two canon violations measured, not assumed.** `_matstate.py` on the delivered blend: SSS = 0.0
+on all five materials, one material over 97.6% of the face. `_lipbands.py`: the baked atlas
+paints the WHOLE muzzle near-white — inner lip rim sRGB (209,200,196) vs outer band (227,217,214),
+a difference of **6.9 out of 441**. So `CANON.md`'s "Broad pink muzzle" was absent as well as
+"SSS — NO exceptions", and a material pass had to carry COLOUR, not just surface response.
+
+**`present.py` was flattering the build.** Its `polish_materials()` set SSS at render time, in
+RAM, and never saved — so every hero PNG showed subsurface the delivered VRM did not have. That
+is why SSS = 0.0 went unnoticed for a week while the pictures looked fine. It now stands down
+automatically when the mesh carries authored materials, which also makes the A/B honest: the
+"before" side is exactly what had been shipping.
+
+**Colour cannot be matched by looking, and I proved that the hard way.** The reference muzzle that
+LOOKS salmon measures sRGB (120,101,137) — blue-dominant mauve, confirmed by PIL and an
+independent ffmpeg decode. The image display path auto-levels every frame it renders, so a crop of
+that mauve region is DISPLAYED as bright pink. It misled me twice: once on the muzzle, once when I
+called the cavity "too light" — measured, its darkest quartile is (22,10,10). `_refcolor.py` works
+in ratios to the fur white point instead; chroma is trusted, and luminance only where two
+differently-graded frames agree independently (muzzle Y/Y_fur = 0.487 and 0.496, within 2%).
+
+**Result, measured against the reference rather than asserted:**
+
+| | Y_pad/Y_fur | chroma R:G:B |
+|---|---|---|
+| before | 0.548 | 1.39 : 0.91 : 0.77 |
+| **after** | **0.461** | **1.80 : 0.80 : 0.63** |
+| reference target | 0.496 | 1.76 : 0.81 : 0.66 |
+
+Chroma lands on target; the pad is 7% darker than the reference. Reported, not chased.
+
+**Three bugs my own diagnostics caught before the operator saw them:**
+1. Dividing the atlas out per vertex clamped on **29448 verts (61% of the mesh)** — it would have
+   flattened the Holstein black patches and crushed the bright fur toward mean grey. Replaced with
+   ratios relative to fur, so fur stays exactly 1.0 and the atlas keeps all its variation:
+   2910 verts tinted instead of 29448.
+2. Re-anchoring the interior materials' LEVEL to the atlas fur made enamel mid-grey (155,150,143),
+   which inside an unlit cavity would double-count the darkening and make the teeth vanish — the
+   same double-counting that collapsed the tongue blade earlier. Now only HUE is rotated onto the
+   measurement; the tuned luminance is kept. The cavity is the one level deliberately moved.
+3. The first render showed a chain of pale scalloped lobes along the lip. **I nearly blamed the
+   scalloped teeth.** They are pale, so they were the cream band itself: the skin edge at the lip
+   is 0.0038–0.008 while the inner band is 0.0045, so the band is **0.89 edges wide** and its
+   iso-contour festooned along the topology. Fixed by Laplacian-smoothing the distance field
+   (8 passes) and by ending the pad below the mouth on GEODESIC distance so it follows the lip
+   curve instead of cutting a horizontal z-line. The stage now reports band width in edge-lengths
+   every build, and says outright that a crisper rim needs lip loops, not a material change.
+
+**A silent no-op caught on the way out — the export.** The VRM addon emits a uniform-white dummy
+`COLOR_0` and puts the real vertex colours in `COLOR_1`, which glTF and three.js both ignore. The
+delivered VRM would have rendered the OLD white muzzle on the live surface while Blender showed
+the new one — every gate green, reality unchanged, the same shape as the stale-bundle bug. Ruled
+out by experiment: removing the `ShaderNodeAttribute` nodes (still two streams) and authoring as
+`BYTE_COLOR`/CORNER (still two, and it quantised 1635 distinct values to 348). `vrm_color0_fix.py`
+repoints `COLOR_0` at the accessor holding the data, runs automatically inside `vrm_export`, is
+idempotent, and `vrm_check` passes on the rewritten file. `renderer_check.py` gained the gate that
+proves it — reading vertex DATA, because colour accessors carry no `min`/`max` and a
+metadata-based check would have passed every time.
+
+Also fixed while here: my first version of that gate called three primitives FAILED that were
+already correct (constant-colour materials legitimately have uniform white COLOR_0), and
+`rebuild.sh --from-scratch` was still printing a 12-stage chain missing `densify`, `hoof`,
+`mesh_patch` and `materials`, and citing jaw 13° instead of the 22° stress pose.
+
+**Gates:** accept GREEN (27 checks) · vrm_check GREEN · renderer_check GREEN · materials.py's own
+geometry gate asserts vertices, faces, shape keys and all 51 vertex groups byte-identical.
+
+**Open for the operator:** the scallop. `TEETH_N=7`/`TEETH_CUT=0.34` reads as a white sawtooth
+with the mouth open, and the reference measures the upper canine (176,158,130) and dental pad
+(170,151,125) as the SAME colour — one continuous cream ridge, no per-tooth differentiation.
+Evidence now favours reverting it. That is a geometry change and shipped work, so it is their call.
+
+## 2026-07-30 — A7 REALIGNED to the canon art, then PROMOTED
+
+Operator on the first version: **"stop trying to human mouth this what the hell happened to my
+references"** — then, after realignment, **"looks good"**. Promoted to canon.
+
+**I was using the wrong reference, and it was my own choice, not a missing file.** I measured
+colour off `canon/mouth_ref/v1_*.png` / `v2_*.png` — frames I had extracted from the operator's
+VIDEOS. One is a blue night scene where white fur measures (113,160,217). The neutral, purpose-
+built modelling reference was on disk the whole time and I never opened it:
+`canon/base_sheet/Clyffy_BASE-NEUTRAL-v1.png`, a 5-view turnaround under even lighting.
+
+| source | Y_pad/Y_fur | chroma R:G:B |
+|---|---|---|
+| canon base sheet, lit pad | 0.80–0.89 | 1.31 : 0.92 : 0.83 |
+| canon anchor art, lit pad | 0.63–0.70 | 1.41–1.50 : 0.88 : 0.74 |
+| what I built | 0.496 | 1.76 : 0.81 : 0.66 |
+| canon anchor art, **shaded underside** | 0.373 | **1.76 : 0.81 : 0.62** |
+
+My value is a dead match for the SHADED UNDERSIDE. I sampled shadow out of graded video and used
+it as the albedo of the entire pad — 40% too dark, 35% too saturated. **Rule now in the pack:
+albedo comes from a neutrally lit reference; graded frames are for structure and motion only.**
+
+**The lip bands were my invention, not a measurement.** "Three concentric bands: salmon inner rim
+→ cream outer band → fur" is HUMAN vermilion-border anatomy. It is on neither canon source. I
+wrote it as prose into `canon/mouth_ref/README.md` off a low-resolution plate, and then measured
+colour *rigorously in service of it*. Every number was right and the target was invented. The
+mouth is a SLIT IN THE PAD; the lips are the pad continuing, and the dark lip line is geometry and
+occlusion, not paint. Deleted, with `lip_bands = false` recorded so it does not come back.
+
+Deleted with it: the `skin_wet` gloss ring at the lip, which was the specular half of the same
+mistake — removed rather than left unused, since an unused attribute is indistinguishable from
+unfinished work.
+
+**Also corrected:** the lateral anchor was "56% of face width", but face width is ambiguous on this
+character — the mesh measurement included the ears, so the phrase meant two different things in the
+art and in the mesh. Now anchored to EYE SEPARATION, which is exact in both (the art shows it, the
+mesh publishes `eye_L_center` / `eye_R_center`).
+
+**Delivered, measured:** rendered pad Y 0.624, chroma 1.54:0.87:0.73 — inside the anchor art's
+bracket. Residuals stated in POAM A7 and the pack: ~17% more saturated and ~25% darker than the
+neutral sheet (SSS pushes red; the rest is the light rig), and the pad boundary is a smooth
+gradient where the reference shows pore stipple and fur feathering over the edge.
+
+**Promotion:** materials → VRM re-export (vrm_color0_fix promoted COLOR_0 on 2 primitives,
+verified by re-read) → 6 heroes + hero sheet + viseme sheet re-rendered → live bundle refreshed in
+BOTH `dist/` and `public/` (public/ is the same inode as canon, so it cannot drift).
+**accept GREEN (27) · vrm_check GREEN · renderer_check GREEN.**
+Rollback: `clyffy_v2_body.blend.pre-mat`, `clyffy.vrm.pre-mat`.
+
+**Correction to the 2026-07-29 entry below:** everything it records about the three-band lip
+structure describes work that has since been deleted as wrong. The measurement discipline in it
+still stands; the target it was aimed at does not.
