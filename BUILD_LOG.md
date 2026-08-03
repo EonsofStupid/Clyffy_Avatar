@@ -3467,3 +3467,46 @@ in its own output rather than implying coverage it does not have.
 Renderer rebuilt (`vite build` → `index-Cf1xjuTk.js`) because dist/ serves a BUILT bundle and a
 source edit alone would not have shipped. `public/` are symlinks to canon and cannot drift.
 `drive_frames.jsonl` re-driven after the schema changed, clearing the staleness warning.
+
+## 2026-08-03 — canon restructured to ONE reference; first PROFILE measurement in the project
+
+**Reference.** Operator: *"use and do this one, move the rest to archive … so we only have this,
+this is perfect."* `canon/reference/` is now the single authoritative face reference — three
+flat-lit 2k sheets (front / 3-4 / TRUE 90° profile, mouth closed; the same three mouth open; muzzle
+close-up in profile) generated from a new higgsfield element built off the operator's own clip, so
+it is that exact character rather than a lookalike. Four superseded sets moved to `canon/_archive/`,
+dated, each with a stated reason; git recorded every move as a rename.
+
+**THIS IS THE FIRST REFERENCE SET WITH A PROFILE.** Every proportion failure in this build — snout
+projection, head length, lip curve, chin — is a profile problem, and every measurement taken before
+today was front-on. `canon/base_sheet/` has had a 90° side view since 2026-07-25 and it was never
+opened. Single biggest process miss of the project.
+
+**First profile numbers** (`tools/head_metrics.py`, identical pipeline both sides):
+
+| | reference | ours |
+|---|---|---|
+| snout projection forward of the forehead, ÷ head depth | **0.144** | **0.347** |
+| head height ÷ head depth | 0.868 | 0.777 |
+
+**Our snout projects ~2.4x too far forward, while head height/depth is within 10%.** That
+CONTRADICTS what I concluded from the front view, where the pad reads flat and I assumed it needed
+to come forward. Both can be true at once and the distinction matters: the muzzle protrudes too far
+as a MASS, while the pink PAD on its surface is too flat and undefined. Front-on measurement cannot
+tell those apart, which is exactly why the snout work kept missing.
+
+**Segmentation had to be rebuilt to get there.** The reference sheets put WHITE FUR (225,220,217)
+on a grey field (208-223) carrying a gradient, so colour distance either eats the fur or keeps the
+background — the first attempt produced a fragmented mask and read the snout tip off a neighbouring
+panel bleeding into frame. Replaced with: flood-fill the background from every border pixel (the
+field is connected, the character is an island), keep the component containing the centroid, fill
+interior holes so the brown patches do not notch the outline. Verified by eye before any number was
+quoted, because the first version's numbers looked plausible and were nonsense.
+
+Also fixed en route: an ad-hoc H/D of 1.360 vs 0.943 that was including the coat on the reference
+side only. The tool's own crown/chin detection gives 0.868 vs 0.777 — a 10% difference, not a 40%
+one. Mismatched extents again; that is the fourth time this session.
+
+No geometry authored yet. `tools/head_proportion.py` is built and gated but its parameters are
+still driven visually, because its ASPECT readout remains untrustworthy for the same
+definition-mismatch reason and is labelled as such in the source.

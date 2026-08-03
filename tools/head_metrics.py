@@ -31,12 +31,67 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 
 def silhouette(path: Path, thresh: int = 26) -> np.ndarray:
     a = np.asarray(Image.open(path).convert("RGB")).astype(float)
     return a.max(axis=2) > thresh
+
+
+def silhouette_light_bg(path: Path, thresh: int = 22) -> np.ndarray:
+    """Silhouette on a LIGHT-GREY field, by flood-filling the background from the border.
+
+    Colour distance cannot do this: the reference sheets put WHITE FUR (225,220,217) on a grey
+    field (208-223) that also carries a gradient, so a threshold either eats the fur or keeps the
+    background. Measured, then verified by eye — the first attempt produced a fragmented mask and
+    a snout-tip reading taken from a neighbouring panel bleeding into frame.
+
+    The background is CONNECTED from every border pixel and the character is an island, so the
+    fill separates them regardless of how close the two values are.
+    """
+    im = Image.open(path).convert("RGB")
+    W, H = im.size
+    work = im.copy()
+    MARK = (255, 0, 255)
+    for xy in [(0, 0), (W - 1, 0), (0, H - 1), (W - 1, H - 1),
+               (W // 2, 0), (W // 2, H - 1), (0, H // 2), (W - 1, H // 2)]:
+        try:
+            ImageDraw.floodfill(work, xy, MARK, thresh=thresh)
+        except Exception:
+            pass
+    a = np.asarray(work)
+    return ~((a[..., 0] == 255) & (a[..., 1] == 0) & (a[..., 2] == 255))
+
+
+def largest_component(mask: np.ndarray) -> np.ndarray:
+    """Keep only the blob containing the mask's centroid — drops adjacent-panel bleed."""
+    m = Image.fromarray((mask * 255).astype(np.uint8)).convert("RGB")
+    ys, xs = np.nonzero(mask)
+    seed = (int(np.median(xs)), int(np.median(ys)))
+    if not mask[seed[1], seed[0]]:
+        seed = (int(xs[len(xs) // 2]), int(ys[len(ys) // 2]))
+    ImageDraw.floodfill(m, seed, (0, 255, 0), thresh=10)
+    a = np.asarray(m)
+    return (a[..., 0] == 0) & (a[..., 1] == 255) & (a[..., 2] == 0)
+
+
+def fill_holes(mask: np.ndarray) -> np.ndarray:
+    """Fill interior holes — the brown patches segment out and would notch the outline."""
+    pad = np.zeros((mask.shape[0] + 2, mask.shape[1] + 2), bool)
+    pad[1:-1, 1:-1] = mask
+    m = Image.fromarray((~pad * 255).astype(np.uint8)).convert("RGB")
+    ImageDraw.floodfill(m, (0, 0), (255, 0, 0), thresh=10)
+    a = np.asarray(m)
+    outside = (a[..., 0] == 255) & (a[..., 1] == 0) & (a[..., 2] == 0)
+    return (~outside)[1:-1, 1:-1]
+
+
+def clean_silhouette(path: Path, light_bg: bool, mirror: bool = False) -> np.ndarray:
+    """The full pipeline both sides of a comparison must go through."""
+    m = silhouette_light_bg(path) if light_bg else silhouette(path)
+    m = fill_holes(largest_component(m))
+    return m[:, ::-1] if mirror else m
 
 
 def head_metrics(sil: np.ndarray, label: str = "") -> dict | None:
@@ -124,3 +179,76 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════════
+# PROFILE metrics — the measurement this project never had
+# ═══════════════════════════════════════════════════════════════════════════════════════════
+def profile_metrics(sil: np.ndarray) -> dict | None:
+    """Head proportions from a TRUE SIDE silhouette.
+
+    Anchored on HEAD DEPTH — snout tip to the back of the skull — because that is unambiguous
+    in a photograph and in a render, needs no anatomy knowledge, and is the one dimension a
+    front view physically cannot show. Every proportion failure in this build (snout
+    projection, head length, lip curve, chin) is a profile problem that was being measured
+    front-on.
+
+    The character faces LEFT in our render and RIGHT in the reference sheet, so the caller
+    mirrors one of them; this function assumes the snout is at LOW x.
+    """
+    ys, xs = np.nonzero(sil)
+    if len(ys) < 500:
+        return None
+    x_snout, x_back = int(xs.min()), int(xs.max())
+    depth = x_back - x_snout
+    if depth < 40:
+        return None
+
+    def col_extent(c: int):
+        r = np.nonzero(sil[:, c])[0]
+        return (int(r.min()), int(r.max())) if len(r) > 1 else None
+
+    def row_extent(r: int):
+        c = np.nonzero(sil[r])[0]
+        return (int(c.min()), int(c.max())) if len(c) > 1 else None
+
+    # crown: highest row whose horizontal run is still a real slab of head, not a horn tip
+    rows = [(r, (lambda e: e[1] - e[0] if e else 0)(row_extent(r)))
+            for r in range(int(ys.min()), int(ys.max()))]
+    rows = [(r, w) for r, w in rows if w > 0]
+    wmax = max(w for _, w in rows)
+    crown = min(r for r, w in rows if w > 0.45 * wmax)
+    chin = max(r for r, w in rows if w > 0.18 * wmax)
+    height = chin - crown
+
+    # snout tip height, and how far the muzzle stands proud of the face above it
+    tip_rows = np.nonzero(sil[:, x_snout:x_snout + max(3, depth // 60)].any(axis=1))[0]
+    tip_y = int(tip_rows.mean()) if len(tip_rows) else crown
+
+    return {
+        "depth": depth, "height": height, "crown_y": crown, "chin_y": chin,
+        "height_over_depth": height / depth,
+        "snout_tip_y_frac": (tip_y - crown) / max(height, 1),
+    }
+
+
+def profile_main(paths, mirror_flags):
+    print(f"{'image':<30}{'depth':>8}{'height':>8}{'H/D':>8}{'snout tip y':>13}")
+    out = []
+    for p, mir in zip(paths, mirror_flags):
+        s = silhouette(Path(p))
+        if mir:
+            s = s[:, ::-1]
+        m = profile_metrics(s)
+        if not m:
+            print(f"{Path(p).name:<30}  (no usable silhouette)")
+            continue
+        print(f"{Path(p).name:<30}{m['depth']:>8}{m['height']:>8}"
+              f"{m['height_over_depth']:>8.3f}{m['snout_tip_y_frac']:>13.3f}")
+        out.append(m)
+    if len(out) == 2:
+        a, b = out
+        print(f"\n  ours vs reference:")
+        print(f"    height/depth   {b['height_over_depth']/a['height_over_depth']:.2f}x"
+              f"   (ref {a['height_over_depth']:.3f} -> ours {b['height_over_depth']:.3f})")
+        print(f"    snout tip y    ref {a['snout_tip_y_frac']:.3f} -> ours {b['snout_tip_y_frac']:.3f}")
