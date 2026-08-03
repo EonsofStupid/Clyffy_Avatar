@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Read TARGET COLOURS off the operator's reference frames, normalized to a white point.
+"""Read TARGET COLOURS off reference frames, normalized to a white point.
+
+⛔ SUPERSEDED 2026-08-03. The frames this reads are ARCHIVED — they are dim and blue-graded, and
+measuring albedo from them produced a muzzle 40% too dark and 35% too saturated. The authoritative
+reference is now `canon/reference/`, which is flat-lit for exactly this reason. This tool is kept
+because `clyffy.pack.toml` and `BUILD_LOG.md` cite the numbers it produced; point it at the new
+set before trusting any colour it reports.
+
 
     python3 tools/_refcolor.py [--marks OUT.png]
 
@@ -26,7 +33,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
-REF = ROOT / "canon/mouth_ref"
+REF = ROOT / "canon/_archive/2026-07-29_mouth_ref_videoframes"
 
 # What OUR mesh's fur measures in the baked atlas, from tools/_lipbands.py (linear).
 OUR_FUR_LINEAR = np.array([0.367, 0.372, 0.388])

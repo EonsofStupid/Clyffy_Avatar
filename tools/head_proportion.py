@@ -8,7 +8,7 @@ Runs at chain position 1.5 — AFTER `canonicalize`, BEFORE `mouth_open`.
 ═══ WHY HERE AND NOT ON THE FINISHED BODY ═══════════════════════════════════════════════════
 
 Operator, 2026-08-01: *"the head is long when it needs to be short"*, and earlier *"you have
-never really captured his mouth"*. Measured against `canon/face_ref/FACE_REF_front.png`, our head
+never really captured his mouth"*. Measured against `canon/reference/`, our head
 is ~44% too narrow for its height, and the excess sits below the mouth: the jaw/throat runs 28%
 of head height under the lip where the reference runs ~14%. That also drags the mouth to 72% down
 the head instead of ~87%, which is a large part of why the mouth never reads right — it is placed
@@ -133,7 +133,7 @@ head_h = crown_z - neck_z
 print(f"  HEAD HEIGHT     {head_h:.4f}   ear-to-ear {ear_w:.4f}   ASPECT {ear_w/max(head_h,1e-9):.2f}")
 print(f"  mouth sits      {100*(crown_z - z_lip)/max(head_h,1e-9):.0f}% down the head")
 print(f"  REFERENCE       aspect 1.48, mouth 87% down "
-      f"(canon/face_ref/FACE_REF_front.png, read off a gridded overlay)")
+      f"(canon/reference/, read off a gridded overlay — see SPEC.md)")
 
 if MEASURE_ONLY:
     print("\n--measure: nothing written")

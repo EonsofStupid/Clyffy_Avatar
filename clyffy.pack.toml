@@ -76,8 +76,11 @@ operator_groups = ["op_jaw_region", "op_lip_seam"]
 # the shaded UNDERSIDE of the pad in the canonical art, i.e. 40% too dark and 35% too
 # saturated. Graded frames are for structure and motion. Never for colour.
 [materials]
-reference_primary    = "canon/base_sheet/Clyffy_BASE-NEUTRAL-v1.png"      # neutral turnaround
-reference_crosscheck = "canon/CLYFFY/DPN/Clyffy_Anchor-Standalone-FINAL.png"
+# ⛔ SINGLE SOURCE OF TRUTH for the face, operator ruling 2026-08-03. Everything else is in
+# canon/_archive/ and is NOT a target. See canon/reference/SPEC.md.
+reference_primary    = "canon/reference/modelsheet_neutral.png"        # front / 3-4 / true 90 deg
+reference_open       = "canon/reference/modelsheet_open.png"           # cavity, dentition, tongue
+reference_detail     = "canon/reference/detail_muzzle_profile.png"     # snout projection, lip roll
 measured_by          = "tools/_refcolor.py"
 
 # Muzzle pad albedo, as a ratio to the FUR (grading-invariant, so it transfers to our render).
@@ -305,7 +308,7 @@ max_influences     = 3
 
 # ── SOURCE ART ────────────────────────────────────────────────────────────────
 [sources]
-base_sheet   = "canon/base_sheet/Clyffy_BASE-NEUTRAL-v1.png"   # decision A3 — neutral, prop-free
+base_sheet   = "canon/_archive/2026-07-25_base_sheet_mesh_origin/Clyffy_BASE-NEUTRAL-v1.png"  # ARCHIVED — the mesh was generated from this; superseded as a look target by canon/reference/
 base_views   = "work/views_base/BASE_*.png"
 look_av      = "canon/CLYFFY/AV/canonical/Clyffy_Episodic-Kenny-Protocol.png"
 look_dpn     = "canon/CLYFFY/DPN/Clyffy_Anchor-Standalone-FINAL.png"

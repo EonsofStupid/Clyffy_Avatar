@@ -57,7 +57,8 @@ breaking those citations to tidy a filename would lose more than it gains.
 | `body_rig.py` | VRM-humanoid body + face weights transferred BY INDEX |
 | `hoof.py` | dark cloven-hoof material — after `body_rig` (material only, no geometry) |
 | `mesh_patch.py` | close the inherited Tripo hole — adds faces only |
-| `materials.py` | **muzzle pad + lip bands + SSS + roughness.** Colour and surface response ONLY — asserts vertices, faces, shape keys and every vertex group are byte-identical. After `mesh_patch` (which changes face indices), before `vrm_export`. Writes `materials_report.json` |
+| `head_proportion.py` | **stage 1.5** — reshape the head to canon proportions. Displacement ONLY; asserts vertex/face counts and both operator groups unchanged. Runs after `canonicalize`, before `mouth_open`, because the 47 shape keys are deltas against current geometry |
+| `materials.py` | **muzzle pad + patch browning + SSS + roughness.** Colour and surface response ONLY — asserts vertices, faces, shape keys and every vertex group are byte-identical. After `mesh_patch` (which changes face indices), before `vrm_export`. Writes `materials_report.json` |
 | `vrm_export.py` | VRM 1.0 + springs. **SEGFAULTS ON EXIT after writing a valid file** — check the output, not the exit code |
 | `spring_bones.py` | used by `vrm_export` |
 | `vrm_color0_fix.py` | used by `vrm_export` — promotes the real vertex colours into `COLOR_0`. The VRM addon emits a uniform-white dummy `COLOR_0` and hides the data in `COLOR_1`, which every glTF consumer ignores; without this the authored muzzle tint is a silent NO-OP in the delivered file |
@@ -84,6 +85,17 @@ breaking those citations to tidy a filename would lose more than it gains.
 | `voice_tts.py` | local OuteTTS + WavTokenizer (Phase V) |
 | `rebuild.sh` · `blender_env.sh` | fast verify / schema / optional VRM re-export · Blender 5.2 PATH pin |
 
+### REFERENCE — `canon/`, restructured 2026-08-03
+| path | what |
+|--------|------|
+| `canon/reference/` | **THE single authoritative face reference.** 3 flat-lit 2k sheets with a true 90° profile + `SPEC.md`. Operator: *"we only have this, this is perfect."* |
+| `canon/_archive/` | every superseded set, dated by when it was replaced, with a README saying why. Kept because `pack.toml` / `BUILD_LOG.md` cite their numbers |
+| `canon/CLYFFY/` · `canon/docs/` · `canon/_MASTER_REGISTRY.md` | show bible — gitignored, untouched |
+
+`tools/head_metrics.py` measures head proportions from a SILHOUETTE, applying ONE function to the
+reference and to our render alike — written because three earlier attempts compared a mesh to a
+photo with different definitions and produced numbers that contradicted what was plainly visible.
+
 ### DIAGNOSTIC — produced a recorded number; cited by the SSOT, not run in the chain
 | Script | Produced |
 |--------|----------|
@@ -92,7 +104,7 @@ breaking those citations to tidy a filename would lose more than it gains.
 | `stretch_map.py` | `max_edge_stretch = 3.85` (cited in `pack.toml`) |
 | `_matstate.py` | the material state actually SAVED in a blend — found SSS = 0.0 on all five materials, and that `present.py` was adding it at render time only |
 | `_lipbands.py` | that the baked atlas paints the whole muzzle near-white (inner lip vs outer band = 6.9/441), so a material pass has to carry COLOUR, not just SSS |
-| `_refcolor.py` | the reference target colours, as ratios to the fur white point. Absolute sampling is invalid here: the frames are dim and blue-graded, and the image display path auto-levels, so colour cannot be matched by looking |
+| `_refcolor.py` | ⛔ SUPERSEDED — reads the ARCHIVED graded frames. The reference target colours, as ratios to the fur white point. Absolute sampling is invalid here: the frames are dim and blue-graded, and the image display path auto-levels, so colour cannot be matched by looking |
 
 ### SUPERSEDED — kept for provenance, NOT the product path
 | Script | Superseded by | Why kept |

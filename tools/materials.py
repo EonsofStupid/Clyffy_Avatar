@@ -23,8 +23,8 @@ a week while the pictures looked fine. It now stands down when the mesh carries 
 
 ═══ THE REFERENCE — AND THE ONE I GOT WRONG ═════════════════════════════════════════════════
 
-PRIMARY:     canon/base_sheet/Clyffy_BASE-NEUTRAL-v1.png   (5-view turnaround, NEUTRAL lighting)
-CROSS-CHECK: canon/CLYFFY/DPN/Clyffy_Anchor-Standalone-FINAL.png   (canonical DPN art)
+PRIMARY:     canon/reference/  — see canon/reference/SPEC.md (flat-lit, true 90° profile)
+ARCHIVED:    canon/_archive/  — every earlier set; do not measure albedo from those
 
 The first version of this stage used frames pulled from the operator's reference VIDEOS instead
 (canon/mouth_ref/v1_*.png, v2_*.png). Both are badly graded for colour — one is a blue night scene
@@ -86,11 +86,11 @@ os.makedirs(OUT, exist_ok=True)
 TARGETS = {
     #                chroma                 ylev    basis
     "fur":       ((1.00, 1.00, 1.00),       1.000,  "it IS the white point"),
-    "muzzle":    ((1.31, 0.92, 0.83),       0.850,  "canon/base_sheet lit pad, 3 samples"),
+    "muzzle":    ((1.31, 0.92, 0.83),       0.850,  "archived base_sheet lit pad, 3 samples"),
 }
 # ── HOLSTEIN PATCHES: grey -> warm brown ────────────────────────────────────────────────────
-# Measured against canon/face_ref/FACE_REF_front.png as a ratio of the dark patch to the white
-# fur, so the comparison survives the reference's lighting:
+# Measured as a ratio of the dark patch to the white fur (see canon/reference/SPEC.md), so the
+# comparison survives the reference's lighting:
 #     reference   patch/fur Y 0.036   chroma 1.47 : 0.86 : 1.00   (warm = brown)
 #     ours        patch/fur Y 0.126   chroma 0.99 : 1.00 : 0.99   (dead neutral = grey)
 # Ours is 3.5x too LIGHT with zero warmth. Operator 2026-08-01: get the face aligned to the
@@ -112,7 +112,7 @@ TONGUE_CHROMA, TONGUE_Y = (2.03, 0.73, 0.60), 0.450   # ladder; chroma measured 
 TEETH_CHROMA,  TEETH_Y  = (1.09, 0.99, 0.85), 0.850   # ladder: enamel is bright
 CAVITY_CHROMA, CAVITY_Y = (2.30, 0.60, 0.55), 0.060   # reads pure black in-frame via occlusion
 
-# ── reference proportions, from canon/base_sheet/Clyffy_BASE-NEUTRAL-v1.png ─────────────────
+# ── reference proportions (source now canon/reference/, see SPEC.md) ────────────────────────
 # Landmark RATIOS off a gridded overlay of the FRONT view, so they transfer to our mesh
 # regardless of scale or crop.
 #
@@ -715,11 +715,11 @@ report = {
               "achieved_ylev": round(float(got_y), 4),
               "achieved_chroma": [round(float(x), 3) for x in got_ch],
               "verts": int(PATCH_MASK.sum()), "touched": int((w_patch > 0.02).sum()),
-              "reference": "canon/face_ref/FACE_REF_front.png"},
+              "reference": "canon/reference/ (see SPEC.md)"},
     "sss": {"fur": SSS_FUR, "flesh": SSS_FLESH, "radius": list(SSS_RADIUS),
             "scale": SSS_SCALE_SKIN},
     "roughness": {"fur": ROUGH_FUR, "muzzle": ROUGH_MUZZLE},
-    "reference": "canon/base_sheet/Clyffy_BASE-NEUTRAL-v1.png (primary) + canon/CLYFFY/DPN/Clyffy_Anchor-Standalone-FINAL.png (cross-check)",
+    "reference": "canon/reference/ (see SPEC.md)",
 }
 import json as _json
 with open(os.path.join(os.path.dirname(SRC), "materials_report.json"), "w") as fh:
