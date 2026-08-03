@@ -181,6 +181,95 @@ Rollbacks: `.pre-m2`, `.pre-m3`, `.pre-lips`, `.pre-hoof`, `.pre-polish`, `.pre-
 - **VERIFY:** ✅ operator confirmed the A/B (`work/mouth_ab/A7_canon_aligned.png`) 2026-07-30.
 - **Status:** STEPS 1–3 DONE. Steps 4–8 open. **Depends on:** A0.
 
+### A10 — PERFORMANCE PASS: make him move like a character, not a rig
+*(operator 2026-07-31: "the snout does nothing and the bottom has no wiggle… ears need to be able
+to have some wobble… we are aiming for quality not speed… work it through each beat as a true
+senior artist would")*
+
+**This is the axis A7 should have been on.** A7 changed COLOUR. The operator asked twice for
+"finesse on the lips and mouth", supplied four reference **VIDEOS**, and I reduced them to four
+still frames and measured pixels. Motion was the entire point of them being videos.
+
+#### THE WORKING CONTRACT — how every beat below is worked, no exceptions
+1. **MEASURE THE REFERENCE FIRST.** Numbers off the actual video before any authoring. No beat
+   starts from memory, taste, or a still frame.
+2. **Author the smallest change that targets those numbers.** One beat at a time.
+3. **Render a comparison at matched framing** — ours beside the reference, same crop.
+4. **Measure the result against the target and report the residual**, including when it misses.
+5. **The operator confirms by eye.** I never self-certify that something looks right.
+6. **Journal + all gates green before the next beat opens.** Nothing promotes to canon until the
+   beat is confirmed.
+7. If a beat's measurement contradicts earlier shipped work, **say so and stop** — do not defend
+   recent work because it is recent.
+
+**Standing rules this pass inherits (learned the expensive way):**
+* Albedo comes from a NEUTRALLY LIT reference; graded frames are for structure and motion.
+* **Motion comes from VIDEO, never from stills.**
+* Never treat a plate I derived as the spec — find the operator's authoritative source first.
+* The image display path auto-levels, so tone cannot be judged by looking; measure pixels.
+
+#### MEASURED DEFICITS (all verified 2026-07-31, read-only)
+| deficit | evidence |
+|---|---|
+| the head NEVER moves | `renderer/src/main.js` `idle()` touches only `eyeL/eyeR.rotation` + blink morphs |
+| ears + tail cannot wobble | spring chains ARE authored and ARE simulated (`vrm.update(dt)`) — they have **zero excitation**. Not a stiffness problem. |
+| morph weights snap | the live path sets morphs directly each frame; only the audio ENVELOPE is smoothed (1-pole). The offline `avatar_drive.py` does coarticulate — the live surface does not. |
+| snout is a rigid plate | pad p90 travel 0.05–1.65%H, concentrated at the lip edge. Reference: pad HEIGHT varies **17.7%**, AREA **37.9%**, WIDTH only **3.8%** — it squashes vertically and holds its width, i.e. a soft mass. |
+| nostrils rigid | `noseSneer` moves **0%** of pad verts past 1%H. Reference nostril area varies **20.8%**. |
+| no lower-lip mass | the lower lip is a thin edge; the reference carries a thick soft roll that drops well below the teeth |
+| symmetric + periodic | gaze is a pure sine, blink a fixed 0.12 s sine, L/R shapes driven together — nothing is ever slightly different |
+
+#### THE BEATS
+
+**B0 — REFERENCE BREAKDOWN. No authoring at all. ✅ CLOSED 2026-07-31.**
+Primary reference is `6f675283` (operator-supplied): ONE character on pure black, ears visible
+throughout, 8 s continuous. It removed the wrong-character/wrong-scene failure mode outright —
+**the fix was better FOOTAGE, not a better detector**, after five auto-detectors were spent on
+cluttered clips. Targets: B1 head motion, B4 snout deformation, B3 hold times, B2 ear amplitude.
+B2 lag/settle explicitly NOT established (pose-dominated signal) and recorded as such.
+Extract motion signatures from all four operator videos (`~/.claude/uploads/…`, 289/145/241/176
+frames): head translation + rotation curves, ear lag and settle time relative to head, pad
+height/area/nostril-area curves, blink timing and asymmetry, how long mouth shapes HOLD.
+Deliver a measured reference sheet. Every later beat is scored against these numbers.
+**This is the step I skipped, and skipping it is why we are here.**
+
+**B1 — PRIMARY MOTION: head and body. ✅ SHIPPED 2026-08-01.**
+`control_surface.IDLE` + `idle_pose()` is the SSOT (emitted into the schema), consumed by the web
+renderer's `applyIdlePose()` and gated by `tools/idle_check.py`. **GREEN: crown X rms 0.0166 vs
+target 0.0168 (0.99x), Y 0.0110 vs 0.0101 (1.09x).** Amplitudes derived from measured per-degree
+gains, not guessed. Vertical bob is a hips TRANSLATION — rotation cannot produce it.
+⚠️ Ear wobble is NOT verifiable in Blender (VRM spring bones are simulated by the web renderer);
+this gate proves the head MOVES, which is the excitation they were missing. **Operator's eye on
+`http://127.0.0.1:5273/?autoplay` is the remaining check.** Original spec: Idle sway, bob, weight shift, breath, and head accents on
+speech. Everything else in this pass is driven by it.
+*Verify:* the ears start moving on their own, because the springs finally have input.
+
+**B2 — SECONDARY: overlap and settle.** Tune the ear/tail spring response against B0's measured
+lag and settle. Add a lower-lip / jowl chain if B0 shows the lip carries after the jaw.
+*Verify:* ear settle time matches the reference within tolerance.
+
+**B3 — WEIGHT DYNAMICS.** Attack / decay / overshoot on morph weights and the jaw in the LIVE
+path. No mesh change, works through the existing contract, so every renderer inherits it.
+*Verify:* no weight steps to target in one frame; measured against B0's transition timings.
+
+**B4 — SNOUT AS A MASS.** New authored shapes (`snoutSquash`, `nostrilFlare`, philtrum deepen)
+driven alongside `jawOpen`. Targets from B0: pad height ≈18%, area ≈38%, nostrils ≈21%, width held.
+*Verify:* re-measure our render with the same script used on the reference.
+
+**B5 — LOWER LIP AS A SOFT MASS.** Thickness + carry, so the bottom has the wiggle the operator
+asked for. Geometry — the only beat that risks the containment and pose gates.
+
+**B6 — BREAK SYMMETRY AND PERIODICITY.** L/R offsets, noise, blink variety (fast close / slow
+open, occasional doubles), micro-saccades instead of a sine.
+
+**B7 — FULL PERFORMANCE REVIEW.** Side-by-side video against the reference at matched framing.
+
+**VERIFY (the milestone):** operator watches ours beside the reference and confirms it reads as a
+character rather than a rig.
+**Status:** **B0 CLOSED · B1 SHIPPED (2026-08-01)** — targets in `work/ref_motion/REFERENCE_SHEET.md`.
+B2 next (ears: amplitude target 0.68x head translation; lag evidence weak at r=0.087).
+**Depends on:** A0. **Supersedes** A7 steps 4–8 as the priority.
+
 ### A8 — Web surface: neubrutalist / claymorphism (TanStack)
 - **Objective:** a styled web version of the avatar for the operator's TanStack site,
   developed IN PARALLEL without disturbing the desktop surface.
@@ -239,7 +328,10 @@ Rollbacks: `.pre-m2`, `.pre-m3`, `.pre-lips`, `.pre-hoof`, `.pre-polish`, `.pre-
 
 ## Sequence
 
-**A0 ✅ · A9 ✅ · A7 steps 1–3 ✅ → A1 (BUILT) → A7 steps 4–8 (scallop is the operator's call) · A8 (web fork, parallel) → A2 · A3 → A4 → A5 → A6**
+**A0 ✅ · A9 ✅ · A7 steps 1–3 ✅ → A10 (PERFORMANCE — operator priority, B0 first) → A1 (BUILT) → A7 steps 4–8 (scallop is the operator's call) · A8 (web fork, parallel) → A2 · A3 → A4 → A5 → A6**
+
+A10 supersedes A7 steps 4–8 as the priority: A7 was the wrong axis. The operator asked for how the
+mouth MOVES and got colour.
 
 A1 first because it is a *silent* defect: everything in this pack is green while the thing on
 the operator's screen is a day-old face. A2 is operator-blocked and can run alongside. A3 is

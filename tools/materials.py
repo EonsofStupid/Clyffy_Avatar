@@ -88,6 +88,25 @@ TARGETS = {
     "fur":       ((1.00, 1.00, 1.00),       1.000,  "it IS the white point"),
     "muzzle":    ((1.31, 0.92, 0.83),       0.850,  "canon/base_sheet lit pad, 3 samples"),
 }
+# ── HOLSTEIN PATCHES: grey -> warm brown ────────────────────────────────────────────────────
+# Measured against canon/face_ref/FACE_REF_front.png as a ratio of the dark patch to the white
+# fur, so the comparison survives the reference's lighting:
+#     reference   patch/fur Y 0.036   chroma 1.47 : 0.86 : 1.00   (warm = brown)
+#     ours        patch/fur Y 0.126   chroma 0.99 : 1.00 : 0.99   (dead neutral = grey)
+# Ours is 3.5x too LIGHT with zero warmth. Operator 2026-08-01: get the face aligned to the
+# reference, "color first then muzzle".
+#
+# The mask is DARK AND NOT BLUE. Dark alone would also catch the navy DevPULSE shirt, which is
+# painted into the same atlas — measured: patches sRGB (98,99,98) at saturation 0.06, shirt
+# (92,104,120) at 0.41. Excluding blue-dominant pixels separates them cleanly without needing a
+# vertex group. Feathering on the atlas's own luminance means the patch EDGES stay exactly where
+# the texture painted them, soft and organic, instead of being re-drawn by a threshold.
+PATCH_CHROMA = (1.47, 0.86, 1.00)
+PATCH_YLEV   = 0.036          # patch luminance as a fraction of the white fur's
+PATCH_LUM_LO = 0.16           # atlas luminance at/below which a vertex is fully patch
+PATCH_LUM_HI = 0.30           # at/above which it is fur and untouched
+PATCH_BLUE_MAX = 0.015        # linear (B - R); above this it is the shirt, not fur
+
 # Separate materials (constants, not the gradient).
 TONGUE_CHROMA, TONGUE_Y = (2.03, 0.73, 0.60), 0.450   # ladder; chroma measured (lit edge)
 TEETH_CHROMA,  TEETH_Y  = (1.09, 0.99, 0.85), 0.850   # ladder: enamel is bright
@@ -134,6 +153,18 @@ def linear_to_srgb(c):
 def lum(c):
     return float(0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2])
 
+
+# ── ROLLBACK, TAKEN FIRST ───────────────────────────────────────────────────────────────────
+# Copied off disk BEFORE the file is opened. The previous version saved this at the END of the
+# stage, which meant the "rollback" contained the fully MODIFIED state — it would have restored
+# nothing. Caught when a re-run failed with "Base Color driven by VECT_MATH" reading its own
+# output back out of the backup.
+if os.path.abspath(OUT) == os.path.dirname(SRC):
+    _pre = SRC + ".pre-mat"
+    if not os.path.exists(_pre):
+        import shutil
+        shutil.copy2(SRC, _pre)
+        print(f"  rollback saved BEFORE any edit: {os.path.basename(_pre)}")
 
 bpy.ops.wm.open_mainfile(filepath=SRC)
 ob = max([o for o in bpy.data.objects if o.type == "MESH"], key=lambda o: len(o.data.vertices))
@@ -312,8 +343,24 @@ matskin = me.materials[SKIN]
 bsdf = next(n for n in matskin.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
 base_sock = bsdf.inputs["Base Color"]
 assert base_sock.is_linked, "skin Base Color is not textured — this stage assumes the atlas"
-tex_node = base_sock.links[0].from_node
-assert tex_node.type == "TEX_IMAGE", f"Base Color driven by {tex_node.type}, not an image"
+# Walk UPSTREAM to the image. On a re-run this stage's own `atlas x tint` VectorMath node sits
+# between the texture and Base Color, and asserting on the immediate node made the stage fail
+# against any blend it had already processed — a stage that cannot run twice is not a stage.
+def _find_image(sock, depth=0):
+    if depth > 6 or not sock.is_linked:
+        return None
+    nd = sock.links[0].from_node
+    if nd.type == "TEX_IMAGE":
+        return nd
+    for i in nd.inputs:
+        r = _find_image(i, depth + 1)
+        if r is not None:
+            return r
+    return None
+
+
+tex_node = _find_image(base_sock)
+assert tex_node is not None, "could not reach a TEX_IMAGE upstream of Base Color"
 img = tex_node.image
 W, Hp = img.size
 px = np.asarray(img.pixels[:], dtype=np.float32).reshape(Hp, W, 4)
@@ -375,6 +422,75 @@ rel_muz = rel_to_fur(c_muz, "muzzle")
 tint = rel_fur[None, :] * (1 - m_muz)[:, None] + rel_muz[None, :] * m_muz[:, None]
 tint[~np.isfinite(d)] = 1.0
 tint = np.clip(tint, 0.0, 1.0)
+# ── patch tint, composed on top of the muzzle tint ──────────────────────────────────────────
+# ONE canonical pair of masks, defined here and used for derivation, correction AND reporting.
+# Two earlier attempts derived the multiplier from one vertex set and verified against another,
+# so the correction pushed the wrong way (patch/fur Y went 0.016 -> 0.008 while chasing 0.036).
+# That is the same mismatched-definition bug that cost the motion work a day: if two sides of a
+# comparison do not use identical masks, they are not measuring the same thing.
+atlas_lum = 0.2126 * atlas[:, 0] + 0.7152 * atlas[:, 1] + 0.0722 * atlas[:, 2]
+not_blue = (atlas[:, 2] - atlas[:, 0]) < PATCH_BLUE_MAX
+
+# The MUZZLE is excluded outright. The atlas paints pores and shading inside the pad, some of
+# them below the dark threshold, and browning those turned the pink pad blotchy — dark spots
+# scattered across the muzzle in the first render. The pad already has its own tint; a vertex
+# cannot belong to both regions.
+in_muzzle = m_muz > 0.05
+PATCH_MASK = (atlas_lum < PATCH_LUM_LO) & not_blue & ~in_muzzle   # canonical: dark fur
+FUR_MASK = (atlas_lum > 0.45) & ~in_muzzle                        # canonical: white fur
+if int(PATCH_MASK.sum()) < 200 or int(FUR_MASK.sum()) < 200:
+    raise RuntimeError(f"patch/fur masks too small ({int(PATCH_MASK.sum())}/"
+                       f"{int(FUR_MASK.sum())}) — has the atlas changed?")
+
+# Feather on the atlas's own luminance so the patch EDGES stay where the texture painted them.
+w_patch = 1.0 - smooth01((atlas_lum - PATCH_LUM_LO) / max(PATCH_LUM_HI - PATCH_LUM_LO, 1e-9))
+w_patch = np.where(not_blue & ~in_muzzle, w_patch, 0.0)
+
+tint0 = tint.copy()
+pch = np.asarray(PATCH_CHROMA, float)
+pch = pch / max(lum(pch), 1e-9)
+
+
+def _apply(rel):
+    return np.clip(tint0 * ((1.0 - w_patch)[:, None] + rel[None, :] * w_patch[:, None]), 0.0, 1.0)
+
+
+def _ratio(rel):
+    """Achieved patch and fur ALBEDO. Names deliberately suffixed: plain `F` is the face count
+    from the top of this file, and shadowing it made the geometry gate compare a colour array
+    against an integer (`faces [0.78 0.75 0.74] -> 48077`). The gate caught it, which is what it
+    is for, but the collision should not have been there."""
+    alb = atlas * _apply(rel)
+    return np.median(alb[PATCH_MASK], axis=0), np.median(alb[FUR_MASK], axis=0)
+
+
+# Closed loop on the CANONICAL masks: measure the achieved albedo, correct, repeat.
+rel_patch = np.ones(3)
+for _pass in range(6):
+    P_alb, F_alb = _ratio(rel_patch)
+    want = pch * PATCH_YLEV * lum(F_alb)
+    err = want / np.maximum(P_alb, 1e-6)
+    if np.all(np.abs(err - 1.0) < 0.02):
+        break
+    rel_patch = np.clip(rel_patch * err, 1e-4, 1.0)
+tint = _apply(rel_patch)
+
+P_alb, F_alb = _ratio(rel_patch)
+got_y = lum(P_alb) / max(lum(F_alb), 1e-9)
+got_ch = (P_alb / np.maximum(F_alb, 1e-6)) / max(got_y, 1e-9)
+ps = linear_to_srgb(np.median(atlas[PATCH_MASK], axis=0))
+qs = linear_to_srgb(P_alb)
+print(f"  patches: {int(PATCH_MASK.sum())} verts, {int((w_patch>0.02).sum())} touched "
+      f"(feathered on the atlas's own edges)")
+print(f"    albedo sRGB ({ps[0]:5.1f},{ps[1]:5.1f},{ps[2]:5.1f}) -> "
+      f"({qs[0]:5.1f},{qs[1]:5.1f},{qs[2]:5.1f})   x({rel_patch[0]:.3f},{rel_patch[1]:.3f},{rel_patch[2]:.3f})")
+print(f"    patch/fur  Y {got_y:.3f} (target {PATCH_YLEV})   "
+      f"chroma ({got_ch[0]:.2f},{got_ch[1]:.2f},{got_ch[2]:.2f}) (target "
+      f"{PATCH_CHROMA[0]:.2f},{PATCH_CHROMA[1]:.2f},{PATCH_CHROMA[2]:.2f})")
+print(f"    shirt protected: {int(((~not_blue) & (atlas_lum < PATCH_LUM_LO)).sum())} "
+      f"blue-dominant  |  muzzle protected: {int((in_muzzle & (atlas_lum < PATCH_LUM_LO)).sum())} "
+      f"dark pad pixels")
+
 print(f"  tint: fur stays 1.000, muzzle pad x({rel_muz[0]:.3f},{rel_muz[1]:.3f},{rel_muz[2]:.3f})")
 print(f"    verts actually tinted (any channel < 0.99): "
       f"{int((tint < 0.99).any(axis=1).sum())} of {N}")
@@ -593,7 +709,13 @@ report = {
     "pad_lower_geodesic": D_LOW,
     "targets_srgb": {k: [round(float(x), 1) for x in linear_to_srgb(v)]
                      for k, v in (("fur", c_fur), ("muzzle", c_muz))},
-    "tint_multipliers": {"muzzle": [round(float(x), 4) for x in rel_muz]},
+    "tint_multipliers": {"muzzle": [round(float(x), 4) for x in rel_muz],
+                         "patch": [round(float(x), 4) for x in rel_patch]},
+    "patch": {"chroma": list(PATCH_CHROMA), "ylev": PATCH_YLEV,
+              "achieved_ylev": round(float(got_y), 4),
+              "achieved_chroma": [round(float(x), 3) for x in got_ch],
+              "verts": int(PATCH_MASK.sum()), "touched": int((w_patch > 0.02).sum()),
+              "reference": "canon/face_ref/FACE_REF_front.png"},
     "sss": {"fur": SSS_FUR, "flesh": SSS_FLESH, "radius": list(SSS_RADIUS),
             "scale": SSS_SCALE_SKIN},
     "roughness": {"fur": ROUGH_FUR, "muzzle": ROUGH_MUZZLE},
@@ -605,10 +727,5 @@ with open(os.path.join(os.path.dirname(SRC), "materials_report.json"), "w") as f
 print(f"  report: {os.path.join(os.path.dirname(SRC), 'materials_report.json')}")
 
 dst = os.path.join(OUT, os.path.basename(SRC))
-if os.path.abspath(dst) == SRC:
-    pre = SRC + ".pre-mat"
-    if not os.path.exists(pre):
-        bpy.ops.wm.save_as_mainfile(filepath=pre, copy=True)
-        print(f"  rollback saved: {os.path.basename(pre)}")
 bpy.ops.wm.save_as_mainfile(filepath=dst)
 print(f"wrote {dst}")

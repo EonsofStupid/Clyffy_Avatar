@@ -3300,3 +3300,170 @@ Rollback: `clyffy_v2_body.blend.pre-mat`, `clyffy.vrm.pre-mat`.
 **Correction to the 2026-07-29 entry below:** everything it records about the three-band lip
 structure describes work that has since been deleted as wrong. The measurement discipline in it
 still stands; the target it was aimed at does not.
+
+## 2026-07-31 — A10 B0: reference motion breakdown (PARTIAL — 1 of 3 shots measured)
+
+Operator: *"the snout does nothing and the bottom has so [no] wiggle… ears need to be able to have
+some wobble… quality not speed… work it through each beat as a true senior artist would."*
+
+**The root diagnosis first, and it is not what I assumed.** The ears do not wobble because
+**nothing ever moves the head.** `renderer/src/main.js` `idle()` touches only `eyeL/eyeR.rotation`
+and the blink morphs. The spring chains ARE authored (ears + tail) and ARE simulated
+(`vrm.update(dt)`) — they have zero excitation, so the simulation faithfully computes no motion.
+I would have spent a day tuning stiffness on a rig that was already correct.
+
+**Measured, valid (ruler stable to 3.1%, 40 frames, confirmed by eye):**
+
+| quantity | reference | ours |
+|---|---|---|
+| pad HEIGHT varies | **24.0%** | pad p90 travel 0.05–1.65 %H, all at the lip edge |
+| pad WIDTH varies | **3.1%** | — |
+| pad AREA varies | **42.1%** | — |
+| nostril area varies | **42.9%** | `noseSneer` moves **0%** of pad verts past 1 %H |
+| aperture hold, median / p90 | **62.5 / 187.5 ms** | live path writes weights straight to target: ~42 ms, no hold |
+
+Height varies ~8× more than width: the snout **squashes vertically and holds its width** — a soft
+mass. Ours is a rigid plate on a hinge.
+
+**NOT measured, and B1/B2 are blocked on it:** head sway amplitude/rate needs a longer, wider
+shot than the closeup; ear lag needs an ear-visible shot (`ear_frames = 0` in the only valid one).
+Two of three declared shots failed their ruler gate — a camera push-in in one (real scale change,
+not tracker error) and muzzle/neck flip-flop in the other. **Recorded as unmeasured rather than
+estimated.**
+
+**THE EXPENSIVE LESSON — complexity was the bug.** The measurement worked on the FIRST attempt:
+tight hand-chosen crop, plain absolute pink rule, raw min/max bbox → 3.8% stability. I then
+"improved" it four times — coarse-grid mode seeking, robust percentile bounds, a white-balanced
+hue test, ROI mean-shift — and every addition made it strictly worse: 3.8% → 30% → 67% → 81%.
+Reverting to the naive version restored 3.1%. Every addition was solving a problem the CROP had
+already solved. Two sub-lessons kept in the tool: a whole-head crop makes the detector lock onto
+the **brass steampunk goggles** (warmest thing on the head — crop below the eyes instead of
+out-clevering it), and a fixed `R > B` hue rule inverts under the blue night grade where the
+muzzle measures (120,101,137).
+
+Five successive auto-detectors were also the wrong instinct outright. An artist picks the take by
+LOOKING; `tools/ref_motion.py` now carries an explicit shot manifest — clip, frame range, crop —
+chosen off gridded overlays and validated against a debug contact sheet every run.
+
+Deliverables: `tools/ref_motion.py`, `work/ref_motion/REFERENCE_SHEET.md`, `ref_motion.json`,
+per-shot curve plots and `_track_*.png` validation sheets. **No authoring; the avatar is untouched.**
+
+## 2026-07-31 (later) — A10 B0: operator supplied a clean reference; B1 unblocked
+
+Operator: *"what about these for reference instead of risking you grabbing wrong characters or
+wrong scenes which seem to keep happening"* — supplying `6f675283`: ONE character, isolated on
+pure black, ears visible throughout, 8 s of continuous performance.
+
+**That was the correct call and it fixed the problem at the source.** Measured: background
+5th-percentile luminance 0.0, only two framing changes in the clip, so frames 0–191 are one
+unbroken take. With a black background the silhouette IS the character — there is nothing to
+mistake it for. Five auto-detectors and four "improvements" had been spent fighting clutter that
+this clip simply does not contain. **The fix was better FOOTAGE, not a better detector**, and I
+should have asked for it instead of building a fifth tracker.
+
+**B1 targets now measured** (crown of the silhouette — a rigid skull point needing no anatomy
+segmentation; ruler = silhouette height 349 px, stable to 6.9%, 100% tracked over 192 frames):
+
+| quantity | reference | ours |
+|---|---|---|
+| crown X peak-to-peak | **0.437** body-heights | **0.000** |
+| crown X rms | **0.084** | 0.000 |
+| crown Y peak-to-peak | **0.069** | 0.000 |
+| dominant rate | **0.375 Hz** X / **0.25 Hz** Y | — |
+| median per-frame crown movement | **0.0031** | 0.000 |
+
+The head is never still: it moves every frame, sways ~6× more horizontally than vertically, on a
+slow 2.7–4 s rhythm rather than a jitter. Ours never moves, which is simultaneously why it reads
+robotic and why the ear springs — correctly authored, genuinely simulated every frame — produce
+exactly zero wobble. **B1 is the prerequisite for B2, not a parallel nicety.**
+
+B4 targets stand from the earlier valid shot (pad height 24.0%, width 3.1%, area 42.1%, nostril
+42.9%). B3 hold times stand (aperture hold median 62.5 ms, p90 187.5 ms); rise times remain
+flagged as a single excursion, not yet a distribution.
+
+**B2 (ear lag) still not measured** — `ear_extent` looks for dark flaps against light and the
+polarity is inverted on this clip. The footage is right (ears visible in all 192 frames, clearly
+swinging); what is needed is ear TIPS from the silhouette outline, then ear-tip motion minus crown
+motion. One measurement away on footage that already works.
+
+`tools/ref_motion.py` now carries both methods — `silhouette` for black-background clips and
+`crop` for the muzzle closeup — with the shot manifest, frame ranges and crops declared and
+validated against a `_track_*.png` contact sheet every run. No authoring; the avatar is untouched.
+
+## 2026-07-31 (B0 closed) — ear motion measured; lag deliberately left open
+
+Ears now tracked in **all 192 frames** of the isolated clip, via the silhouette outline in a band
+8–20% of figure height below the crown. 20 frames rejected where raised arms exceeded the ears
+laterally and would have read as ear motion.
+
+**The usable B2 target — ear reach rms 0.0926 / 0.0958 body-heights against crown rms 0.0841, i.e.
+the ears travel ~1.1× as far as the head translates.** A ratio, so it transfers to our rig at any
+scale, and it is what spring stiffness and drag get tuned against.
+
+**Lag came out 0 frames on both ears and I am NOT reporting that as a finding.** The outline's
+sideways reach responds to ear swing AND to head rotation, so a head turning in place moves the
+signal with no ear dynamics at all — lag-0 is the signature of a pose-dominated measurement, not
+evidence that the ears do not trail. The settle figure from the same signal (median 42 ms, p90
+83 ms) inherits the contamination and is recorded as an upper bound, not a target.
+
+Isolating true spring lag needs the ear tip in the SKULL's frame, which needs head orientation —
+more than the crown gives. Left open on purpose: B1 is the prerequisite for ANY ear motion (the
+springs are authored and simulated correctly and produce zero wobble solely because the head never
+moves), and the amplitude ratio is sufficient to tune against. Revisit only if B2 looks wrong once
+B1 lands.
+
+**B0 is CLOSED.** Targets in `work/ref_motion/REFERENCE_SHEET.md`: B1 head motion (solid), B4 snout
+deformation (solid), B3 hold times (solid; rise times still a single excursion), B2 amplitude
+(solid) with lag/settle explicitly unestablished. No authoring — the avatar is untouched.
+
+## 2026-08-01 — A10 B1 SHIPPED: the head and body move; idle_check GREEN
+
+`control_surface.IDLE` + `idle_pose()` is the SSOT (emitted into the schema); the web renderer
+consumes it via `applyIdlePose()`, and `tools/idle_check.py` verifies it against the measured
+reference. **idle_check GREEN: crown X rms 0.0166 vs target 0.0168 (0.99x), Y 0.0110 vs 0.0101
+(1.09x).** accept GREEN · vrm_check GREEN · renderer_check GREEN.
+
+**A measurement definition was wrong on BOTH sides, and fixing it changed two beats.** "Crown" was
+the topmost silhouette rows — which are horn TIPS. Rolling the head raises one horn and lowers the
+other, so a tip centroid partly cancels: it **under-reported lateral motion by ~6×** (target read
+0.0383 when the truth is 0.0168). Switching both `ref_motion.py` and `idle_check.py` to the
+HEAD-MASS centroid (mean over the top 12% of the figure) fixed it — and gave the skull a clean
+rigid reference, which **also separated the ear lag that B0 had recorded as unmeasurable: 166.7 ms,
+4 frames.** The earlier lag-0 was an artefact of the reference point, exactly as suspected; noting
+it as untrustworthy rather than publishing it turned out to be the right call.
+
+Targets are **idle-specific**, from the six quietest 2 s windows (X rms 0.0168), not the whole take
+(0.0818, which includes pointing/leaning/arms-crossed). Building idle to the whole-take number
+would read as drunk.
+
+**Four bugs found by measuring rather than assuming:**
+1. `pose_bone.matrix` silently discards translation on CONNECTED bones — spine/chest/neck/skull are
+   all connected, so every rotation except hips (the one unconnected bone) did nothing. Calibration
+   reported exactly 0.00000 for six of seven drivers while a depsgraph read showed the same
+   rotations moving the crown 0.18 units. Replaced with `matrix_basis` conjugation.
+2. The calibration MEASURED via a render and read stale/blank results. Rewritten to read the
+   evaluated mesh — the camera is orthographic and aligned to lat/up, so projecting the mesh IS
+   what a render would measure, ~50× faster and with no rendering pipeline in the error budget.
+3. `pose_bone.location` is already in SCENE units; dividing by `bone.length` (0.0196) overshot the
+   vertical bob ~50×, putting crown Y rms at 0.66 against a target of 0.0101.
+4. `set_bone_rotation` assigns `matrix_basis` wholesale, so the hips translation had to be applied
+   AFTER the rotations or it was silently wiped.
+
+**Amplitudes are derived, not guessed.** `idle_check --calibrate` measures crown displacement per
+degree per driver: head_roll 0.01246, spine_roll 0.00452, hips_roll 0.00418 lateral; head_pitch
+0.00061, chest_pitch -0.00057 vertical. Head ROLL is the strongest lateral driver (3× the spine)
+because the crown is the horn tips. The spine still carries the bulk of the amplitude because that
+is where a real weight shift originates. Vertical bob is authored as a hips TRANSLATION because
+rotation cannot produce it — for small angles height changes by (1-cos t), which vanishes.
+
+Reported honestly: dominant-frequency readout (0.125 Hz vs 0.375 Hz target) is an FFT RESOLUTION
+artefact — an 8 s window has 0.125 Hz bins, so a 0.19 Hz term lands in the 0.125 bin. Not gated.
+
+**NOT verifiable here: ear wobble.** VRM spring bones are simulated by the web renderer
+(`vrm.update(dt)`), not by Blender. This gate proves the head MOVES — the excitation the springs
+were missing. The wobble itself is the operator's eye on the live surface, and `idle_check` says so
+in its own output rather than implying coverage it does not have.
+
+Renderer rebuilt (`vite build` → `index-Cf1xjuTk.js`) because dist/ serves a BUILT bundle and a
+source edit alone would not have shipped. `public/` are symlinks to canon and cannot drift.
+`drive_frames.jsonl` re-driven after the schema changed, clearing the staleness warning.

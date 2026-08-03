@@ -357,12 +357,118 @@ def text_to_visemes(text: str) -> list[str]:
     return out
 
 
+# ── IDLE — the character is NEVER still (POAM A10 / B1) ──────────────────────────────────────
+# Measured off the operator's canon reference `6f675283` by tools/ref_motion.py; full derivation
+# in work/ref_motion/REFERENCE_SHEET.md.
+#
+# WHY THIS EXISTS. The delivered avatar's head bone was never touched by anything: `idle()` in
+# the web renderer moved only the eyes and the blink. That is the root of "robotic", and it is
+# ALSO why the ears never wobbled — the spring chains are correctly authored and are genuinely
+# simulated every frame by `vrm.update(dt)`, they simply received zero excitation. Nothing about
+# the spring rig needed changing; the head needed to move.
+#
+# TARGETS ARE IDLE-SPECIFIC, NOT WHOLE-TAKE. The reference clip is a performance — pointing,
+# leaning, arms crossed — and its whole-take crown motion is 0.0841 rms. Building idle sway to
+# that would read as drunk. These numbers come from the six QUIETEST 2-second windows, which is
+# what "standing there, alive" actually measures at:
+#     crown X rms 0.0168 body-heights   (whole take: 0.0818)
+#     crown Y rms 0.0101                (whole take: 0.0133)
+# "Crown" is the HEAD-MASS centroid — the mean over the top 12% of the figure. It is NOT the
+# topmost rows: those are horn TIPS, and rolling the head raises one horn while lowering the
+# other, so a tip centroid partly cancels and under-reports lateral motion by ~6x. The same
+# definition is used by tools/ref_motion.py and tools/idle_check.py, or the two sides of the
+# comparison would not be measuring the same thing.
+#     dominant 0.375 Hz lateral / 0.25 Hz vertical
+#
+# LATERAL SWAY ORIGINATES AT THE SPINE, NOT THE NECK. The crown sits ~0.22 body-heights above the
+# head pivot but ~0.75 above the hips, so a 3 deg spine lean displaces it as far as a 14 deg head
+# roll. Driving this from the head alone would need ~10 deg RMS of roll — visibly wrong, and
+# anatomically backwards: a real idle is a weight shift that the head counters slightly.
+#
+# Frequencies are deliberately INCOMMENSURATE (no small-integer ratios) so the loop never visibly
+# repeats. Amplitudes are in degrees and are tuned against the measured target by
+# tools/idle_check.py, which renders the pose and re-measures crown RMS with the same instrument
+# used on the reference.
+IDLE: dict = {
+    "target": {
+        "crown_x_rms_bodyheights": 0.0168,
+        "crown_y_rms_bodyheights": 0.0101,
+        "dominant_hz": {"x": 0.375, "y": 0.25},
+        "source": "6f675283 quietest 2s windows; work/ref_motion/REFERENCE_SHEET.md",
+        "tolerance": 0.25,          # measured RMS must land within +/-25% of target
+    },
+    # [amplitude_deg, hz, phase_rad] — summed. Frequencies are deliberately INCOMMENSURATE
+    # (no small-integer ratios) so the loop never visibly repeats.
+    #
+    # Amplitudes are set from MEASURED gains, not guessed. tools/idle_check.py --calibrate reads
+    # the evaluated mesh and reports crown displacement per degree for each driver:
+    #     head_roll   0.01246   spine_roll 0.00452   hips_roll  0.00418   (lateral, per deg)
+    #     head_pitch  0.00061   chest_pitch -0.00057                       (vertical, per deg)
+    # Head ROLL is the strongest lateral driver — 3x the spine — because the crown is the horn
+    # tips, which swing wide. The spine still carries the bulk of the amplitude because that is
+    # where a real weight shift originates; the head adds a smaller counter-motion on top.
+    "sway": {
+        # ⛔ ZEROED 2026-08-01. Operator: "the whole body wiggles not the ears".
+        # Driving hips + spine + chest made the entire figure wander, and it was never needed:
+        # spring bones respond to ACCELERATION, and a slow 0.2 Hz sine has almost none, so this
+        # excited the ears essentially not at all while visibly moving everything else. Ear
+        # wobble needs sharp head ACCENTS, not body sway. Kept at zero rather than deleted so
+        # the measured per-degree gains and the idle_check gate stay meaningful.
+        "spine_roll_deg":  [[0.0, 0.190, 0.00]],
+        "spine_pitch_deg": [[0.0, 0.157, 3.40]],
+        "hips_roll_deg":   [[0.0, 0.190, 0.35]],
+    },
+    "head": {
+        # Head-only, and small. The face is what is being judged; this is enough to stop it
+        # reading as a statue without pulling focus.
+        "yaw_deg":   [[1.10, 0.173, 0.90], [0.45, 0.389, 2.60]],
+        "pitch_deg": [[0.55, 0.211, 4.30], [0.22, 0.443, 6.00]],
+        "roll_deg":  [[0.60, 0.229, 1.20], [0.25, 0.371, 3.80]],
+    },
+    # VERTICAL bob is a TRANSLATION, in body-heights — it cannot come from rotation. For small
+    # angles a rotation changes height by (1 - cos t), which is second-order and vanishes: every
+    # rotational driver measured <= 0.0013 body-heights/deg vertically. The reference's 0.0118
+    # vertical RMS is the whole figure rising and falling on its legs, so it is authored as what
+    # it physically is.
+    "bob": {"hips_rise_bodyheights": [[0.0, 0.230, 0.00]]},   # zeroed with the sway
+    # Breath is the one motion that must never stop, in any state, including rest_loop.
+    "breath": {"hz": 0.23, "chest_pitch_deg": 0.35, "phase": 0.0},
+}
+
+
+def idle_pose(t: float) -> dict:
+    """Evaluate IDLE at time t. Returns degrees per bone axis, for EVERY consumer.
+
+    One implementation so the web renderer and the Blender path cannot drift apart — the same
+    reason VISEMES and ENVELOPE live here rather than in each renderer.
+    """
+    import math as _m
+
+    def _sum(terms):
+        return sum(a * _m.sin(2.0 * _m.pi * f * t + p) for a, f, p in terms)
+
+    br = IDLE["breath"]
+    return {
+        "spine_roll":  _sum(IDLE["sway"]["spine_roll_deg"]),
+        "spine_pitch": _sum(IDLE["sway"]["spine_pitch_deg"]),
+        "hips_roll":   _sum(IDLE["sway"]["hips_roll_deg"]),
+        "head_yaw":    _sum(IDLE["head"]["yaw_deg"]),
+        "head_pitch":  _sum(IDLE["head"]["pitch_deg"]),
+        "head_roll":   _sum(IDLE["head"]["roll_deg"]),
+        "chest_pitch": br["chest_pitch_deg"] * _m.sin(2.0 * _m.pi * br["hz"] * t + br["phase"]),
+        # body-heights, not degrees — a translation of the whole figure
+        "hips_rise": _sum(IDLE["bob"]["hips_rise_bodyheights"]),
+    }
+
+
+
 def write_schema(out_dir: str) -> None:
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "control_surface.schema.json")
     with open(path, "w") as f:
         json.dump({"schema": SCHEMA, "presets": PRESETS, "visemes": VISEMES,
-                   "envelope": ENVELOPE, "grapheme_visemes": GRAPHEME_VISEMES}, f, indent=2)
+                   "envelope": ENVELOPE, "idle": IDLE,
+                   "grapheme_visemes": GRAPHEME_VISEMES}, f, indent=2)
     print(f"wrote {path}")
 
 
