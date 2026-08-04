@@ -3510,3 +3510,84 @@ one. Mismatched extents again; that is the fourth time this session.
 No geometry authored yet. `tools/head_proportion.py` is built and gated but its parameters are
 still driven visually, because its ASPECT readout remains untrustworthy for the same
 definition-mismatch reason and is labelled as such in the source.
+
+---
+
+## 2026-08-03 — the proportion pass shipped, and the 2.4x figure it was built on was WRONG
+
+The entry above this one is retained as written because it records a real process improvement, but
+**its headline number is retracted.** "Our snout projects ~2.4x too far forward" was measured with a
+brow row placed at a fraction of crown-to-CHIN, and on the reference sheet the chin is set by the
+**LAB COAT**. That dropped the brow row onto the muzzle itself, so `x_brow` came out nearly equal to
+`x_snout` and the reference's own projection collapsed to a third of its true value. Our render has
+no coat, so the two sides were measuring different rows of different animals.
+
+Reproduced live rather than argued: the same reference panel measured **0.404, then 0.070**, purely
+from where the chin landed. Segmentation was NOT the cause — the old flood-fill scores 0.488 on the
+corrected metric against the new path's 0.455.
+
+**The front view had been right the whole time. The muzzle needed to come FORWARD.**
+
+### The metric that replaced it
+
+`tools/profile_shot.py` (new) renders a true 90 degree side view; `head_metrics.snout_projection`
+measures it and the reference panel through ONE function. Anchored on **crown and snout tip only** —
+two landmarks that are unambiguously head on both sides — so nothing below the muzzle can enter it.
+
+| | reference | before | after |
+|---|---|---|---|
+| snout past brow ÷ skull behind brow | **0.455** | 0.401 (0.88x) | **0.454 (1.00x)** |
+| muzzle depth ÷ crown-to-snout-tip | **0.635** | 0.547 (0.86x) | **0.642 (1.01x)** |
+
+Shipped at **`--snout 1.15 --muzzle 1.35`**. Verified on the FINAL body after all twelve downstream
+stages, not on the reshape stage alone. `tools/run_chain.sh` (new) encodes the whole order.
+
+### Five defects found on the way, each of which produced a confident wrong answer
+
+1. **The snout band had no lower edge.** `wz` was 1 for every vertex below its cutoff — **39141 of
+   46001 verts, 85% of the body, down to the hooves at z=-0.489.** Only the `ahead` gate kept the
+   chest from being dragged backwards; it worked by accident. The band is now MEASURED: for each
+   horizontal slice of the head, how far it reaches past the brow plane. That profile is the muzzle,
+   bounded at both ends by measurement.
+2. **`ahead` was 40% longer than the entire snout.** Ramp `0.35 x head depth` = 0.1204 against a
+   projection of 0.0859, so the whole muzzle sat inside the fade, **`w_sn` peaked at 0.714 with zero
+   verts above 0.9**, and the pullback floored at 71% for any `--snout`. That was the saturation
+   chased for hours.
+3. **A weight sampled by BIN INDEX, not interpolated.** `pzn[bi]` was piecewise-constant over 64
+   slabs ~0.0037 units thick — comparable to an edge length — so every bin boundary was a normal
+   discontinuity, i.e. a real crease. At `--muzzle 1.35` it multiplied crease edges in the upper
+   face **99 -> 325** and fused the two eye-socket rims (25 and 21 verts) into one 240-vertex band
+   across the midline: `eye_open` reported *"expected 2 eye rims, got 1"*. Now `np.interp`.
+4. **All 48 shape keys are SAVED AT VALUE 1.0** from `shape_author` onward. The render shows the
+   evaluated mesh, so every ARKit blendshape was stacked at full strength — the muzzle measured
+   0.454 -> 0.270 across that stage and the face LOOKED torn and shattered. It was not; the rest
+   shape was simply never being displayed. **The shipped canon body carries the same state**, so
+   this is pre-existing and worth a separate look, not a regression.
+5. **Thin polygon slivers around the mouth corner** set `x_snout`, an extreme point. One 1-px spike
+   60px forward of the muzzle dragged the tip row 175px down the face and reported **0.123 against
+   0.455** — a 0.27x "regression" that was one stray sliver. `head_metrics.opening()` now removes
+   structures thinner than the kernel before any landmark is taken.
+
+`blender -b --python` **returns 0 even when the script raised**, so the first chain run sailed past
+the eye-rim assertion and ran eleven more stages against files that were never written. Every stage
+in `run_chain.sh` now declares the artefact it must produce and the chain stops when it is missing.
+
+### Mismatched extents, the project's signature failure, twice more
+
+`profile_shot` cut the head at `z_hi - 0.30*H` — a fraction of FIGURE height. The neck compression
+moves the head down, so the same formula cut at 0.1957 on the canon body and 0.1706 on the reshaped
+one and the two "head-only" silhouettes were not the same anatomy. Now anchored to `op_lip_seam`,
+an operator group carried through every stage. Facing was likewise assumed at FWD=235.1 and is now
+measured from the lip seam (all chain blends read 233.0-233.7; `body_rig` does NOT reorient, which
+disproved the hypothesis that it did).
+
+That is the fifth and sixth instance. Every one had the same shape: two definitions that agreed with
+each other while both were wrong about the world.
+
+### Counts after the reshape
+
+`densify` subdivides by edge length, so a reshaped head changes what it does: **+1128 verts** (was
++940). Chain totals **48254 verts / 48127 faces** (were 48220 / 48077). `mesh_patch` GREEN —
+watertight, 0 non-manifold, 0 boundary. `vrm_check` GREEN. `accept.py` GREEN.
+
+Backup of the pre-reshape canon artefacts: `mesh/_prev_2026-08-03_pre_proportion/`.

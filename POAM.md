@@ -37,7 +37,7 @@ Every gate green, measured this day:
 | mesh hygiene | **watertight** — 0 boundary edges, 0 non-manifold |
 | `clyffy.pack.toml` | parses as TOML (gated in `accept.py`) |
 
-Mesh: 48220 verts. Shapes: 47 authored (ARKit-43 + 4 documented extensions).
+Mesh: 48254 verts (2026-08-03 proportion pass; was 48220). Shapes: 47 authored (ARKit-43 + 4 documented extensions).
 Rollbacks: `.pre-m2`, `.pre-m3`, `.pre-lips`, `.pre-hoof`, `.pre-polish`, `.pre-tongue`,
 `.pre-artic`, `.pre-patch`, `.pre-dense`.
 

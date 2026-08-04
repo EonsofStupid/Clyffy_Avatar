@@ -52,6 +52,8 @@ def opt(name, default):
 
 
 NECK = opt("--neck", 0.55)      # keep this fraction of the jaw->collar band
+SNOUT = opt("--snout", 1.00)    # scale on the muzzle's FORWARD projection past the forehead
+MUZZLE = opt("--muzzle", 1.00)  # VERTICAL fullness of the muzzle mass (profile-measured; not width)
 SQUASH = opt("--squash", 1.00)  # vertical scale of the head itself
 WIDEN = opt("--widen", 1.00)    # lateral scale of the head itself
 MEASURE_ONLY = "--measure" in argv
@@ -158,6 +160,134 @@ z2 = co[:, 2]
 crown2 = crown_z - lost
 neck2 = z_bot + (neck_z - z_bot) * NECK
 lip2 = z_lip - lost
+
+# ── 1b. SNOUT PROJECTION ─────────────────────────────────────────────────────
+# Scales the forward EXCESS past the forehead plane, so the back of the head, the skull and the
+# neck are untouched. >1 extends the muzzle, <1 retracts it: at full weight the vertex maps to
+# `f_brow + (f - f_brow) * SNOUT`.
+#
+# MEASURED IN PROFILE, which is the only view that can see it — tools/profile_shot.py renders a
+# true 90 degree side view and tools/head_metrics.snout_projection measures it and the reference
+# panel through one function. Against `canon/reference/`:
+#
+#     snout past the brow / skull behind the brow     reference 0.455   ours 0.401   (0.88x)
+#     muzzle depth / crown-to-snout-tip               reference 0.635   ours 0.547   (0.86x)
+#
+#     --snout 1.15 puts BOTH ratios on 1.00x.
+#
+# ⛔ CORRECTION. An earlier version of this comment claimed "reference 0.144, ours 0.347 -> ours
+# protrudes ~2.4x too far" and the whole stage was built to RETRACT the muzzle. That was wrong,
+# and it was wrong in the project's signature way: the old metric placed the brow row at a
+# fraction of crown-to-CHIN, and on the reference sheet the chin was set by the LAB COAT. That
+# dropped the brow row onto the muzzle itself, so `x_brow` came out nearly equal to `x_snout` and
+# the reference's projection collapsed to a third of its real value. Our render has no coat, so
+# the two sides were measuring different rows. Reproduced live: the same panel read 0.404, then
+# 0.070, purely from where the chin landed. The metric now anchors on CROWN and SNOUT TIP only —
+# two landmarks that are unambiguously head on both sides — and never looks below the muzzle.
+#
+# The front view was right the whole time: the muzzle needs to come FORWARD, not back.
+if abs(SNOUT - 1.0) > 1e-6 or abs(MUZZLE - 1.0) > 1e-6:
+    f = co @ fwd
+    zc2 = co[:, 2]
+    # forehead plane: how far forward the face reaches ABOVE the muzzle, near the brow
+    # POST-compression landmarks (lip2 / crown2 / neck2). Using the pre-compression z_lip and
+    # crown_z here put the muzzle weight band 0.0358 too high — the neck stage had already
+    # shifted every vertex above it DOWN by exactly that much — so the pullback was landing on
+    # the brow instead of the muzzle and the rendered silhouette barely moved while the mesh's
+    # forward extent went 0.2011 -> 0.1430.
+    brow = (zc2 > lip2 + 0.45 * (crown2 - lip2)) & (zc2 < crown2) & (np.abs(lp - lat0) < 0.25 * ear_w)
+    f_brow = float(np.percentile(f[brow], 92)) if brow.sum() > 20 else float(np.percentile(f, 90))
+    head_m = zc2 > (neck2 - 0.02 * H)
+    depth_m = float(np.ptp(f[head_m]))
+    proj = f - f_brow
+    proj_max = float(proj[head_m].max())
+    proj0 = proj_max / max(depth_m, 1e-9)
+
+    # ── the Z BAND IS MEASURED FROM THE MESH, not placed by hand ─────────────
+    # Two hand-placed bands failed before this. Both were written as a fraction of the lip->crown
+    # span, and both were wrong in ways that a probe caught and the renders did not:
+    #   * NO LOWER EDGE. `wz` was 1 for every vertex below its upper cutoff, which on the real
+    #     mesh meant 39141 of 46001 vertices — 85% of the body, down to the hooves at z=-0.489.
+    #     Only the `ahead` gate kept the chest from being dragged backwards. It worked by accident.
+    #   * The 0.55 -> 0.85 widening was justified by a diagnosis that was never checked. At 0.55
+    #     the snout tip's z term already evaluated to 1.013 -> clipped to 1.000; it was at FULL
+    #     weight the whole time. Widening only added pullback to the FOREHEAD, which must not move.
+    #
+    # So the band is derived instead: for each horizontal slice of the head, how far does the face
+    # reach past the brow plane? That profile IS the muzzle — it peaks at the snout and decays to
+    # nothing at the forehead above and the throat below, so the band is bounded at both ends by
+    # measurement rather than by a guessed constant.
+    NB = 64
+    zlo, zhi = float(zc2[head_m].min()), float(zc2[head_m].max())
+    bi = np.clip(((zc2 - zlo) / max(zhi - zlo, 1e-9) * NB).astype(int), 0, NB - 1)
+    pz = np.zeros(NB)
+    for b in range(NB):
+        m = head_m & (bi == b)
+        if m.sum() >= 8:
+            pz[b] = max(0.0, float(proj[m].max()))
+    pz = np.convolve(pz, np.ones(5) / 5.0, mode="same")   # a stray vertex must not set the band
+    pzn = pz / max(pz.max(), 1e-9)
+
+    # SAMPLE THE PROFILE BY INTERPOLATION, NOT BY BIN INDEX. `pzn[bi]` is a nearest-bin lookup, so
+    # the weight was piecewise-CONSTANT in z: 64 slabs about 0.0037 units thick, comparable to an
+    # edge length, with a jump at every boundary. Those jumps are normal discontinuities — real
+    # creases in the surface. At --muzzle 1.35 they multiplied the crease edges in the upper face
+    # 99 -> 325 and fused the two eye-socket rims (25 and 21 verts) into a single 240-vertex band
+    # across the midline, which is what made eye_open report "expected 2 eye rims, got 1".
+    zb_c = zlo + (np.arange(NB) + 0.5) * (zhi - zlo) / NB
+    pzv = np.interp(zc2, zb_c, pzn)
+    BAND_LO, BAND_HI = 0.15, 0.45            # slices protruding <15% of peak are not the muzzle
+    tz = np.clip((pzv - BAND_LO) / (BAND_HI - BAND_LO), 0.0, 1.0)
+    wz = tz * tz * (3.0 - 2.0 * tz)
+    wz[~head_m] = 0.0
+
+    # ── `ahead` is a CLAMP, not a taper ──────────────────────────────────────
+    # The displacement is already proportional to (f - f_brow), so it is zero at the brow plane on
+    # its own; `ahead` only has to stop vertices BEHIND that plane from being pushed forward.
+    # Scaling its ramp by 0.35 x HEAD DEPTH made it 0.1204 long against a snout that only projects
+    # 0.0859 — the entire muzzle sat inside the fade, `w_sn` peaked at 0.714 with zero vertices
+    # above 0.9, and the retraction floored at 71% no matter how far `--snout` was pushed. That was
+    # the saturation. Scaled by the MEASURED projection it is a short ramp near the brow only.
+    ta = np.clip(proj / max(0.15 * proj_max, 1e-9), 0.0, 1.0)
+    ahead = ta * ta * (3.0 - 2.0 * ta)
+    w_sn = wz * ahead
+    d = proj * (1.0 - SNOUT) * w_sn
+    co[:, 0] -= fwd[0] * d
+    co[:, 1] -= fwd[1] * d
+
+    zb = [zlo + (b + 0.5) * (zhi - zlo) / NB for b in range(NB)]
+    on = [zb[b] for b in range(NB) if pzn[b] >= BAND_HI]
+    print(f"\n  snout band MEASURED: full weight z {min(on):.4f}..{max(on):.4f} "
+          f"({100*(max(on)-min(on))/H:.1f}%H), brow plane f={f_brow:.4f}, projection {proj_max:.4f}")
+    print(f"    weighted verts: w_sn>0.9 {int((w_sn>0.9).sum())}  >0.5 {int((w_sn>0.5).sum())}  "
+          f">0.01 {int((w_sn>0.01).sum())}   max w_sn {w_sn.max():.3f}")
+    f2 = co @ fwd
+    proj1 = (float(f2[head_m].max()) - f_brow) / max(float(np.ptp(f2[head_m])), 1e-9)
+    # Mesh-level only, for tracking that the edit did something. NOT comparable to the reference:
+    # it normalises by head depth, which this edit changes, so numerator and denominator move
+    # together and the ratio under-reports. The comparable number comes from profile_shot.py +
+    # head_metrics.snout_projection, which measure our render and the reference panel identically.
+    print(f"  snout x{SNOUT}: mesh forward excess {proj0:.3f} -> {proj1:.3f} of head depth "
+          f"(indicative only — compare via tools/snout_ladder.sh)")
+
+    # ── 1c. MUZZLE FULLNESS ──────────────────────────────────────────────────
+    # With the projection on target at --snout 1.15 the overlay still showed the reference
+    # standing proud ABOVE the muzzle (a higher nose bridge) and BELOW it (a fuller lower lip).
+    # Getting the tip to the right place did not make the mass the right thickness.
+    #
+    # Z ONLY, DELIBERATELY. A profile silhouette cannot see lateral width, and this stage does not
+    # guess at quantities it has not measured. Muzzle width is a FRONT-view job and is left alone.
+    if abs(MUZZLE - 1.0) > 1e-6:
+        f3 = co @ fwd
+        root = f_brow - 0.5 * proj_max          # fullness reaches back into the muzzle's root
+        tf = np.clip((f3 - root) / max(0.5 * proj_max, 1e-9), 0.0, 1.0)
+        wf = wz * (tf * tf * (3.0 - 2.0 * tf))
+        tot = float(wf.sum())
+        if tot > 1e-6:
+            z_mz = float((co[:, 2] * wf).sum() / tot)     # the muzzle's own centre height
+            co[:, 2] += (co[:, 2] - z_mz) * (MUZZLE - 1.0) * wf
+            print(f"  muzzle x{MUZZLE} about z={z_mz:.4f} (Z only; lateral width is a front-view "
+                  f"job and is untouched), {int((wf > 0.5).sum())} verts at >0.5 weight")
 
 # ── 2. head squash / widen, about the head's own centre ──────────────────────
 # Weighted so the effect fades to nothing by the neck: a hard cut here would crease the throat.

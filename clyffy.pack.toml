@@ -49,6 +49,11 @@ camera_convention = "loc = ctr + (sin a, -cos a) * R ; rot = (90deg, 0, a)"
 # Build in this order; each stage asserts its input is canonical.
 [pipeline]
 canonical  = "mesh/canon/clyffy_v2_canon.blend"   # tools/canonicalize.py — frozen transform, operator groups baked, cleaned
+# Position 1.5 (2026-08-03). DISPLACEMENT ONLY — vertex indices, face count and both operator
+# groups asserted unchanged. Must run BEFORE shape_author: all 47 shape keys are DELTAS authored
+# against the geometry underneath them. Shipped at --snout 1.15 --muzzle 1.35, which puts the
+# profile on 1.00x of canon/reference on both rulers (see BUILD_LOG 2026-08-03).
+proportion = "mesh/canon/clyffy_v2_prop.blend"    # tools/head_proportion.py — neck, snout, muzzle
 mouth_open = "mesh/canon/clyffy_v2_open.blend"    # tools/mouth_open.py   — seam cut, cavity
 chin_mass  = "mesh/canon/clyffy_v2_chin.blend"    # tools/chin_mass.py    — mandible growth (displacement only)
 eyes_open  = "mesh/canon/clyffy_v2_eyes.blend"    # tools/eye_open.py     — eyeball domes separated on the socket rim
@@ -916,8 +921,8 @@ resolved_by = "tools/mesh_patch.py"
 order = ["remove sliver face", "holes_fill", "sweep wire edges"]
 sliver_area = 7.034e-08
 median_face_area = 2.398e-05
-faces = { before = 47178, after = 47179 }
-verts_unchanged = 48220
+faces = { before = 48126, after = 48127 }   # 2026-08-03: re-run after head_proportion
+verts_unchanged = 48254   # was 48220; densify adds +1128 on the reshaped head, was +940
 # Runs LAST and adds FACES ONLY. body_rig transfers face weights BY VERTEX INDEX and asserts
 # equal counts, so anything that changes vertex count invalidates the entire chain.
 

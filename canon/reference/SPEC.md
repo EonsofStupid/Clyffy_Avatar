@@ -40,7 +40,13 @@ front-on. A front view cannot show any of them.
 ## What this set already settles
 
 * The **snout projects forward as a distinct rounded mass**, with the lip line running back from it
-  in a long shallow curve and a soft lower-lip roll beneath the pad. Ours is close to flat.
+  in a long shallow curve and a soft lower-lip roll beneath the pad. **MEASURED 2026-08-03**
+  (`tools/profile_shot.py` + `head_metrics.snout_projection`, one function both sides):
+  snout past the brow / skull behind the brow = **0.455**; muzzle depth / crown-to-snout-tip =
+  **0.635**. Ours was 0.401 / 0.547 — *short*, not long. Corrected by `head_proportion.py` at
+  `--snout 1.15 --muzzle 1.35`. An earlier reading of "ours protrudes 2.4x too far" was an
+  artefact of a brow row derived from a chin that this sheet's LAB COAT was setting; see
+  BUILD_LOG 2026-08-03.
 * **The teeth are CONTINUOUS cream bands, upper and lower** — no separated teeth. This is the
   fourth independent confirmation that the 2026-07-28 scallop (`TEETH_N = 7`, `TEETH_CUT = 0.34`)
   is wrong against canon.

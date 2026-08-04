@@ -52,16 +52,48 @@ def silhouette_light_bg(path: Path, thresh: int = 22) -> np.ndarray:
     """
     im = Image.open(path).convert("RGB")
     W, H = im.size
+    src = np.asarray(im).astype(int)
+
+    # SEEDS ARE CHECKED, NOT ASSUMED. Seeding every border midpoint fails the moment the subject
+    # runs off an edge: our profile render's neck reaches the bottom of the frame, so the seed at
+    # (W/2, H-1) landed ON THE CHARACTER and flood-filled the figure instead of the field. The
+    # background is whatever colour dominates the border, so seed only where the border matches it.
+    border = np.concatenate([src[0], src[-1], src[:, 0], src[:, -1]])
+    bg = np.median(border, axis=0)
+    cand = ([(x, 0) for x in range(0, W, 16)] + [(x, H - 1) for x in range(0, W, 16)]
+            + [(0, y) for y in range(0, H, 16)] + [(W - 1, y) for y in range(0, H, 16)])
+    seeds = [(x, y) for x, y in cand if np.abs(src[y, x] - bg).max() <= thresh]
+    if not seeds:
+        seeds = [(0, 0)]
+
     work = im.copy()
     MARK = (255, 0, 255)
-    for xy in [(0, 0), (W - 1, 0), (0, H - 1), (W - 1, H - 1),
-               (W // 2, 0), (W // 2, H - 1), (0, H // 2), (W - 1, H // 2)]:
+    for xy in seeds:
         try:
             ImageDraw.floodfill(work, xy, MARK, thresh=thresh)
         except Exception:
             pass
     a = np.asarray(work)
     return ~((a[..., 0] == 255) & (a[..., 1] == 0) & (a[..., 2] == 255))
+
+
+def silhouette_neutral_bg(path: Path, chroma_min: int = 4, lum_max: int = 190) -> np.ndarray:
+    """Silhouette on a studio-grey field, by CHROMA rather than by value.
+
+    Measured on `canon/reference/`: the field is EXACTLY neutral (R=G=B, chroma 0-2) and drifts
+    203-209 across the frame, while white fur measures (214,210,205) — only 5 levels brighter but
+    carrying chroma 9. No luminance threshold and no flood fill can separate those; the fill
+    bridged straight through the fur and returned a fragmented, hollow mask.
+
+    Two cues, unioned: anything with real chroma is the character, and anything appreciably darker
+    than the field is the character's shading. The LAB COAT is neutral (chroma 2) and therefore
+    drops out — deliberately. Nothing measured here lives below the jaw, and excluding the coat is
+    what keeps the reference comparable to a render that has no coat in it.
+    """
+    a = np.asarray(Image.open(path).convert("RGB")).astype(int)
+    chroma = a.max(axis=2) - a.min(axis=2)
+    lum = a.mean(axis=2)
+    return (chroma >= chroma_min) | (lum < lum_max)
 
 
 def largest_component(mask: np.ndarray) -> np.ndarray:
@@ -87,10 +119,60 @@ def fill_holes(mask: np.ndarray) -> np.ndarray:
     return (~outside)[1:-1, 1:-1]
 
 
-def clean_silhouette(path: Path, light_bg: bool, mirror: bool = False) -> np.ndarray:
-    """The full pipeline both sides of a comparison must go through."""
-    m = silhouette_light_bg(path) if light_bg else silhouette(path)
+def _shift_and(m: np.ndarray) -> np.ndarray:
+    out = m.copy()
+    out[1:, :] &= m[:-1, :]; out[:-1, :] &= m[1:, :]
+    out[:, 1:] &= m[:, :-1]; out[:, :-1] &= m[:, 1:]
+    return out
+
+
+def _shift_or(m: np.ndarray) -> np.ndarray:
+    out = m.copy()
+    out[1:, :] |= m[:-1, :]; out[:-1, :] |= m[1:, :]
+    out[:, 1:] |= m[:, :-1]; out[:, :-1] |= m[:, 1:]
+    return out
+
+
+def opening(mask: np.ndarray, k: int = 3) -> np.ndarray:
+    """Erode then dilate — deletes structures thinner than ~2k px, restores everything else.
+
+    THE MESH HAS THIN POLYGON SLIVERS around the mouth corner (visible as whisker-like spikes in
+    a shaded render, present in the shipped canon body too). `x_snout` is an EXTREME point, so a
+    single one-pixel spike 60px forward of the muzzle becomes "the snout tip": it dragged the tip
+    row 175px down the face, which dropped the brow row onto the muzzle and reported 0.123 against
+    a reference of 0.455 — a 0.27x "regression" that was entirely one stray sliver.
+    """
+    m = mask
+    for _ in range(k):
+        m = _shift_and(m)
+    for _ in range(k):
+        m = _shift_or(m)
+    return m
+
+
+def clean_silhouette(path: Path, light_bg: bool, mirror: bool = False,
+                     mode: str = "auto", denoise: int = 3) -> np.ndarray:
+    """The full pipeline both sides of a comparison must go through.
+
+    Segmentation necessarily differs — a lit reference sheet and a flat workbench render are not
+    the same kind of image — but everything downstream of this function is shared, which is the
+    part that kept drifting apart before.
+
+      "neutral" — studio-grey field, separated by chroma (the reference sheets)
+      "dark"    — dark subject on a white field (tools/profile_shot.py renders)
+    """
+    if mode == "auto":
+        mode = "neutral" if light_bg else "dark"
+    if mode == "neutral":
+        m = silhouette_neutral_bg(path)
+    elif mode == "dark":
+        a = np.asarray(Image.open(path).convert("RGB")).astype(float)
+        m = a.mean(axis=2) < 140
+    else:
+        m = silhouette_light_bg(path) if light_bg else silhouette(path)
     m = fill_holes(largest_component(m))
+    if denoise:
+        m = fill_holes(largest_component(opening(m, denoise)))
     return m[:, ::-1] if mirror else m
 
 
@@ -230,6 +312,102 @@ def profile_metrics(sil: np.ndarray) -> dict | None:
         "height_over_depth": height / depth,
         "snout_tip_y_frac": (tip_y - crown) / max(height, 1),
     }
+
+
+def snout_projection(sil: np.ndarray) -> dict | None:
+    """How far the muzzle stands proud of the forehead, over the depth of the skull behind it.
+
+    Assumes the character faces RIGHT (snout at HIGH x); the caller mirrors whichever side needs it.
+
+    THE RULER DELIBERATELY EXCLUDES THE SNOUT. Normalising by total head depth is self-cancelling:
+    pulling the muzzle back shrinks the numerator and the denominator together, which is why an
+    earlier ladder reported 0.313 -> 0.306 while the mesh's forward extent moved 0.2011 -> 0.1430.
+    Dividing by the skull BEHIND the brow gives a denominator the edit does not touch.
+
+    Every row bound is found from the silhouette's own width profile rather than assumed, because
+    the two sides crop differently — the reference sheet carries a lab coat where our render has a
+    bare neck, and any fixed lower bound measures a different animal on each side.
+    """
+    ys, xs = np.nonzero(sil)
+    if len(ys) < 500:
+        return None
+    top, bot = int(ys.min()), int(ys.max())
+
+    def run(r):
+        c = np.nonzero(sil[r])[0]
+        return (int(c.min()), int(c.max())) if len(c) > 1 else None
+
+    rows = [(r, run(r)) for r in range(top, bot + 1)]
+    rows = [(r, e) for r, e in rows if e]
+    if len(rows) < 60:
+        return None
+    ry = np.array([r for r, _ in rows])
+    rw = np.array([e[1] - e[0] for _, e in rows], dtype=float)
+    k = max(3, int(0.015 * len(rw)) | 1)
+    sm = np.convolve(rw, np.ones(k) / k, mode="same")
+    sm[:k] = rw[:k]
+    sm[-k:] = rw[-k:]
+
+    # CROWN — highest row that is still a real slab of skull. A horn or an ear tip tapers to a
+    # point and would otherwise set the top of the head.
+    wmax = float(sm.max())
+    crown_i = int(np.argmax(sm > 0.45 * wmax))
+    crown_y = int(ry[crown_i])
+
+    # SNOUT TIP — the frontmost point of the whole silhouette, and the second anchor.
+    #
+    # NO CHIN, NO JAW, NO THROAT PINCH. Every previous version of this needed a lower bound on the
+    # head and every one of them measured a different animal on each side: the reference sheet has
+    # a lab coat where our render has a bare neck and a shirt, so any "bottom of the head" landmark
+    # is really a landmark on the clothing. Anchoring on crown-to-snout-tip uses only rows that are
+    # unambiguously head on both sides, and the region below the muzzle never enters the metric.
+    x_snout = int(xs.max())
+    tip_rows = np.nonzero(sil[:, x_snout - max(2, sil.shape[1] // 400):].any(axis=1))[0]
+    snout_y = int(tip_rows.mean()) if len(tip_rows) else crown_y
+    V = snout_y - crown_y
+    if V < 40:
+        return None
+
+    # BROW — the front of the face above the muzzle, at a fixed fraction of crown-to-tip so it
+    # lands on the forehead regardless of how the head is proportioned.
+    BROW_FRAC = 0.45
+    brow_y = int(round(crown_y + BROW_FRAC * V))
+    be = run(brow_y)
+    if not be:
+        return None
+    x_brow = be[1]
+
+    band = [(r, e) for r, e in rows if crown_y <= r <= snout_y]
+    x_back = min(e[0] for _, e in band)
+
+    skull = x_brow - x_back
+    if skull < 20:
+        return None
+    return {
+        "crown_y": crown_y, "snout_y": snout_y, "brow_y": brow_y,
+        "x_snout": x_snout, "x_back": int(x_back), "x_brow": int(x_brow),
+        "skull_depth": int(skull),
+        "snout_over_skull": (x_snout - x_brow) / skull,
+    }
+
+
+def draw_snout_marks(sil: np.ndarray, m: dict, out: Path, scale: int = 2) -> None:
+    """Draw the landmarks onto the silhouette. Nothing here is quoted before this is eyeballed —
+    a previous version of this measurement read the snout tip off a neighbouring panel bleeding
+    into frame and produced entirely plausible numbers."""
+    h, w = sil.shape
+    rgb = np.zeros((h, w, 3), np.uint8)
+    rgb[sil] = (60, 60, 66)
+    rgb[~sil] = (250, 250, 250)
+    im = Image.fromarray(rgb)
+    d = ImageDraw.Draw(im)
+    for y, col in [(m["crown_y"], (0, 160, 255)), (m["brow_y"], (255, 0, 200)),
+                   (m["snout_y"], (0, 160, 255))]:
+        d.line([(0, y), (w, y)], fill=col, width=3)
+    for x, col in [(m["x_snout"], (255, 40, 40)), (m["x_brow"], (255, 0, 200)),
+                   (m["x_back"], (40, 200, 40))]:
+        d.line([(x, 0), (x, h)], fill=col, width=3)
+    im.resize((w // scale, h // scale)).save(out)
 
 
 def profile_main(paths, mirror_flags):
