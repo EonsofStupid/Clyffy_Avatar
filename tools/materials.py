@@ -86,7 +86,17 @@ os.makedirs(OUT, exist_ok=True)
 TARGETS = {
     #                chroma                 ylev    basis
     "fur":       ((1.00, 1.00, 1.00),       1.000,  "it IS the white point"),
-    "muzzle":    ((1.31, 0.92, 0.83),       0.850,  "archived base_sheet lit pad, 3 samples"),
+    # 2026-08-03: RE-MEASURED off canon/reference/detail_muzzle_profile.png by tools/_padcolor.py.
+    # This was the last colour in the file still sourced from an ARCHIVED reference while the patch
+    # browning beside it had already been re-measured against canon/reference — and it rendered the
+    # pad visibly too pale next to the authoritative sheet. Median of 4 windows, ratio to adjacent
+    # lit fur in linear light, sample boxes verified on a marks overlay first.
+    #     was ((1.31, 0.92, 0.83), 0.850, "archived base_sheet lit pad, 3 samples")
+    # One CLOSED-LOOP correction on top of the measurement: rendering the 1.44/0.743 target under
+    # FLAT light (tools/pad_shot.py --flat) and measuring it back with the same estimator gave
+    # pad/fur Y 1.11x too bright and red chroma 0.91x under-saturated, because SSS and the view
+    # transform sit between the target and the pixel. Corrected by those factors and re-verified.
+    "muzzle":    ((1.58, 0.88, 0.86),       0.669,  "canon/reference detail_muzzle_profile, 4 windows, render-corrected"),
 }
 # ── HOLSTEIN PATCHES: grey -> warm brown ────────────────────────────────────────────────────
 # Measured as a ratio of the dark patch to the white fur (see canon/reference/SPEC.md), so the
