@@ -3591,3 +3591,75 @@ each other while both were wrong about the world.
 watertight, 0 non-manifold, 0 boundary. `vrm_check` GREEN. `accept.py` GREEN.
 
 Backup of the pre-reshape canon artefacts: `mesh/_prev_2026-08-03_pre_proportion/`.
+
+---
+
+## 2026-08-03 (later) — the muzzle pad has a SURFACE, and its colour finally comes from canon
+
+Operator approved and promoted. `accept.py` GREEN with zero warnings, `vrm_check` GREEN.
+
+### The pad colour was the last archived-reference value in the material
+
+`materials.py` sourced the pad from *"archived base_sheet lit pad"* while the patch browning
+directly beneath it in the same file had already been re-measured against `canon/reference`. It
+rendered visibly too pale beside the authoritative sheet. `tools/_padcolor.py` re-measures it with
+the same estimator used for the patch — median windows, ratio to adjacent lit fur, linear light,
+sample boxes checked on a marks overlay before any number was quoted:
+
+    was  (1.31, 0.92, 0.83) ylev 0.850   archived base sheet
+    now  (1.58, 0.88, 0.86) ylev 0.669   canon/reference, render-corrected
+
+### THE LIGHTING TRAP, SEVENTH INSTANCE — and this one nearly shipped a fiction
+
+Measuring our own render under the key light gave **pad/fur = 1.285: the pad BRIGHTER than white
+fur.** Impossible for a pink pad. The pad faces the key and the cheek does not, so the ratio was
+comparing two differently-lit surfaces. `canon/reference` is flat-lit precisely so this cannot
+happen to it, and `pad_shot.py --flat` now gives our side the same treatment. Flat-lit, the same
+estimator reads 0.736 against the reference's 0.661 — and the whole 1.94x "error" evaporated.
+
+    start                     1.94x too bright   0.73x red chroma
+    after one correction      1.09x              0.93x
+
+The residual is **compressed by subsurface weight**: a 10% albedo target change moved the render
+2%. Closing it further means lowering SSS, which trades "reads as flesh" against "matches the
+swatch" — a character call, left to the operator, not silently taken.
+
+### `tools/muzzle_pad.py` — relief that survives export
+
+`materials.py` cannot do micro-relief: `muzzle_tint` is per-VERTEX and at 48254 verts a vertex
+cannot describe a pebble. Two measured constraints decided the approach:
+
+1. **Procedural nodes do not survive glTF export.** A Noise -> Bump graph looks right in Blender
+   and reaches the VRM as nothing. Detail must land in a TEXTURE; VRM 1.0 is fine with that, since
+   MToon carries glTF core's `normalTexture`. **Verified in the exported file**, not assumed:
+   material 0 `normalTexture` -> image `clyffy_normal_pad`.
+2. **The UV layout is fragmented.** Baking `skin_flesh` into UV space shows the muzzle scattered
+   over ~30 islands covering 6% of the sheet — Tripo auto-retopo. UV-space noise would be
+   discontinuous at every island edge, so the noise is evaluated in OBJECT space and Blender's
+   baker resolves the tangent frames rather than this script re-deriving handedness.
+
+**Voronoi Smooth F1, not Noise.** A fractal reads as DUST on the pad at the reference's stipple
+scale; the reference's relief is discrete rounded cells. Shipped at pebble 1800, relief 0.0009,
+pad roughness 0.42 -> 0.34.
+
+Only the pad is composited back over the shipped normal map — `bake()` covers every face and the
+mouth interior, teeth and tongue have no meaningful UVs, so anything outside the pad would be at
+risk. Everything outside the pad is byte-identical.
+
+### Also fixed en route
+
+* `bpy.ops.wm.open_mainfile` clears `bpy.data`, so a scratch image created before a reload comes
+  back as *"StructRNA of type Image has been removed"*.
+* `ShaderNodeMix` carries A/B sockets for every data type; index 7 is B_Color, so writing a float
+  roughness to it raises TypeError. Sockets are now picked by TYPE.
+* `pad_shot.py` frames the forward quarter of `skin_flesh`, because the attribute spans nearly the
+  whole lower face (2665 verts, p90 radius 0.197 on a head ~0.2 tall) and its centroid gives a
+  wide face shot in which no micro-relief is legible.
+
+VRM 82.8 MB -> 93.4 MB (the added normal texture). Backup: `mesh/_prev_2026-08-03_pre_pad/`.
+
+### Known and NOT done (operator informed, deliberately deferred)
+
+* the pad REGION is broader than the reference's, which confines pink to the muzzle front
+* the fur-to-pad EDGE is a soft gradient where the reference has fur strands overlapping the pink
+* all 48 shape keys are still SAVED AT VALUE 1.0 from `shape_author` onward (pre-existing)

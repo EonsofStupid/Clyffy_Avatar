@@ -67,6 +67,20 @@ body       = "mesh/canon/body/clyffy_v2_body.blend"  # tools/body_rig.py — VRM
 # gate asserting vertices, faces, shape keys and all 51 vertex groups byte-identical.
 # Report: mesh/canon/body/materials_report.json
 materials_report = "mesh/canon/body/materials_report.json"
+# tools/muzzle_pad.py (stage 14.5, 2026-08-03) runs after materials and before vrm_export. Bakes
+# PEBBLED micro-relief into the skin normal map inside the pad, and drops pad roughness 0.42 ->
+# 0.34 for the reference's wetter sheen. Adds NO geometry; gates verts/faces/shape-keys/groups.
+#   * baked, not procedural — a Noise/Bump node graph reaches the VRM as NOTHING. The exported
+#     material carries glTF core `normalTexture` -> image `clyffy_normal_pad`, which is verified.
+#   * the noise is evaluated in OBJECT space: the muzzle's UVs are ~30 scattered islands over 6%
+#     of the sheet, so UV-space noise would seam at every island edge.
+#   * Voronoi Smooth F1, not Noise — a fractal reads as dust at the reference's stipple scale.
+#   * only the pad region is composited back over the shipped normal map; bake() covers every
+#     face and the mouth parts have no meaningful UVs.
+pad_normal = "mesh/canon/body/clyffy_normal_pad.png"
+pad_pebble = 1800.0
+pad_relief = 0.0009
+pad_roughness = 0.34
 # Lip rest seal (tools/lip_seal.py) runs on parts BEFORE atlas/shapes so the rest
 # pose does not tunnel-view the teeth. amount=0.85, fwd_bulk=0.0025H, teeth_inset=0.008H.
 # The operator's hand-picked regions live IN the canonical mesh as vertex groups

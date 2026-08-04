@@ -13,6 +13,8 @@
 #     eye_*_radius — which then kills face_atlas four stages later with a bare KeyError.
 #   * eye_open reads clyffy_v2_chin.blend, not clyffy_v2_open.blend.
 #   * materials must follow mesh_patch, which changes face indices.
+#   * muzzle_pad must follow materials — it reads the `skin_flesh` attribute materials authors,
+#     and it tunes the pad roughness through the Mix node materials wires up.
 #   * anything that changes VERTEX COUNT invalidates body_rig, which transfers face weights
 #     BY INDEX and asserts equal counts.
 #
@@ -84,6 +86,8 @@ run body_rig "$OUT/body/clyffy_v2_body.blend"     "$BL" -b --python tools/body_r
 run hoof "$OUT/body/clyffy_v2_body.blend"         "$BL" -b --python tools/hoof.py         -- "$OUT/body/clyffy_v2_body.blend" "$OUT/body" "$FWD"
 run mesh_patch "$OUT/body/clyffy_v2_body.blend"   "$BL" -b --python tools/mesh_patch.py   -- "$OUT/body/clyffy_v2_body.blend" "$OUT/body" "$FWD"
 run materials "$OUT/body/clyffy_v2_body.blend"    "$BL" -b --python tools/materials.py    -- "$OUT/body/clyffy_v2_body.blend" "$OUT/body" "$FWD"
+run muzzle_pad "$OUT/body/clyffy_v2_body.blend"    "$BL" -b --python tools/muzzle_pad.py    -- "$OUT/body/clyffy_v2_body.blend" "$OUT/body" \
+                                                             --pebble 1800 --relief 0.0009
 run vrm_export "$OUT/body/clyffy.vrm"   "$BL" -b --python tools/vrm_export.py   -- "$OUT/body/clyffy_v2_body.blend" "$OUT/body/clyffy.vrm"
 
 echo
