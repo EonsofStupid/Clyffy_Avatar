@@ -21,6 +21,10 @@ argv = sys.argv[sys.argv.index("--") + 1:]
 SRC = os.path.abspath(argv[0])
 OUT = os.path.abspath(argv[1])
 FWD = float(argv[2]) if len(argv) > 2 and not argv[2].startswith("--") else 235.1
+# How far below the lip seam to keep, as a fraction of figure height. 0.090 is the collar and is
+# right for snout work; chin and neck work needs more of the throat than that. Defined HERE, with
+# the other args, because the framing code below consumes it long before the render settings.
+CUT = float(argv[argv.index("--cut") + 1]) if "--cut" in argv else 0.090
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 
 bpy.ops.wm.open_mainfile(filepath=SRC)
@@ -113,8 +117,9 @@ if "op_lip_seam" in gi_ls:
     want_ls = gi_ls["op_lip_seam"]
     zs = [co[v.index, 2] for v in ob.data.vertices
           for g in v.groups if g.group == want_ls and g.weight > 0.5]
-    z_lo = float(np.mean(zs)) - 0.090 * H
-    print(f"  cut anchored to op_lip_seam ({len(zs)} verts): lip z={np.mean(zs):.4f} -> z_lo={z_lo:.4f}")
+    z_lo = float(np.mean(zs)) - CUT * H
+    print(f"  cut anchored to op_lip_seam ({len(zs)} verts): lip z={np.mean(zs):.4f} "
+          f"-> z_lo={z_lo:.4f}  (cut {CUT:.3f}H below the lip)")
 else:
     z_lo = z_hi - 0.30 * H
     print(f"  WARNING: no op_lip_seam group — falling back to z_hi-0.30H = {z_lo:.4f}; "

@@ -74,6 +74,10 @@ L_IN  = float(argv[11]) if len(argv) > 11 else 0.070
 L_OUT = float(argv[12]) if len(argv) > 12 else 0.140
 HINGE_BACK = float(argv[13]) if len(argv) > 13 else 0.75
 HINGE_UP   = float(argv[14]) if len(argv) > 14 else 0.30
+# Diffusion passes that carry the field smoothly into the protected set. See the block at the
+# field construction — without this the protection boundary is a step, and a step in a
+# displacement field folds the surface. Index 15: HINGE_UP already owns 14.
+SMOOTH = int(argv[15]) if len(argv) > 15 else 14
 os.makedirs(OUT, exist_ok=True)
 
 bpy.ops.wm.open_mainfile(filepath=SRC)
@@ -200,6 +204,41 @@ for gname in ("eye_L", "eye_R", "teeth_upper", "teeth_lower", "tongue"):
 
 amp = bump * mask_f * mask_l
 amp[protect] = 0.0
+
+# ── DIFFUSE THE FIELD INTO THE PROTECTED SET ────────────────────────────────────────
+# `amp[protect] = 0.0` on its own is a STEP: a vertex at full displacement sits directly
+# beside one pinned at zero, and a step in a displacement field is a FOLD in the surface.
+# That single line produced both of the defects the operator pointed at on 2026-08-04 —
+#   * the two cone-like extensions at the lower-lateral corners of the chin, where the
+#     navy-garment protection cuts the field off while `bump` is still 1.0, and
+#   * the jagged shards along the lip line, where the `rim` protection does the same.
+# Confirmed by stage: the chin is clean after mouth_open and both appear at chin_mass.
+#
+# The masks themselves are all smoothsteps, so the field was never the problem — the hard
+# boundary condition was. Jacobi diffusion with the protected set held at zero (a Dirichlet
+# condition) keeps every protected vertex EXACTLY untouched, which is the whole point of
+# protecting it, while the surrounding field decays into it over several edge lengths
+# instead of falling off a cliff. Same remedy as the Laplacian pass that fixed the
+# festooned lip bands.
+if SMOOTH > 0:
+    ei = np.empty(len(me.edges) * 2, dtype=np.int32)
+    me.edges.foreach_get("vertices", ei)
+    ea, eb = ei[0::2], ei[1::2]
+    deg = np.zeros(N)
+    np.add.at(deg, ea, 1.0)
+    np.add.at(deg, eb, 1.0)
+    deg = np.maximum(deg, 1.0)
+    before_max = float(amp.max())
+    for _ in range(SMOOTH):
+        acc = np.zeros(N)
+        np.add.at(acc, ea, amp[eb])
+        np.add.at(acc, eb, amp[ea])
+        amp = 0.5 * amp + 0.5 * (acc / deg)
+        amp[protect] = 0.0          # protected verts stay EXACTLY zero, every pass
+    print(f"  field diffused {SMOOTH} passes into the protected set: "
+          f"peak amp {before_max:.3f} -> {amp.max():.3f}, "
+          f"{int((amp > 0.01).sum())} verts carry displacement")
+    assert not np.any(amp[protect] > 1e-9), "diffusion leaked into a protected vertex"
 
 # MONOTONICITY. The field compresses the throat as the chin grows into it. If the ramp-out
 # is steeper than the growth, the surface folds through itself. u' = u + DEPTH*bump(u), so

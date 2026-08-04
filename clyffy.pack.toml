@@ -935,8 +935,8 @@ resolved_by = "tools/mesh_patch.py"
 order = ["remove sliver face", "holes_fill", "sweep wire edges"]
 sliver_area = 7.034e-08
 median_face_area = 2.398e-05
-faces = { before = 48126, after = 48127 }   # 2026-08-03: re-run after head_proportion
-verts_unchanged = 48254   # was 48220; densify adds +1128 on the reshaped head, was +940
+faces = { before = 48132, after = 48133 }   # 2026-08-04: re-run after chin field diffusion
+verts_unchanged = 48259   # 2026-08-04 chin diffusion shifts densify to +1133 (was +1128 / +940)
 # Runs LAST and adds FACES ONLY. body_rig transfers face weights BY VERTEX INDEX and asserts
 # equal counts, so anything that changes vertex count invalidates the entire chain.
 

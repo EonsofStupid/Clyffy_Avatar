@@ -391,6 +391,48 @@ def snout_projection(sil: np.ndarray) -> dict | None:
     }
 
 
+def jaw_contour(sil: np.ndarray, m: dict, n: int = 48):
+    """The UNDERSIDE of the head from the brow plane forward to the snout tip.
+
+    Returns (X, Y) with X in [0,1] across the muzzle's own depth and Y measured DOWN from the
+    crown in units of crown-to-snout-tip, so both are pure shape and neither depends on scale,
+    crop or camera distance.
+
+    WHY THIS WINDOW AND NOT THE WHOLE JAW. The obvious measurement — chin to collar — is not
+    available. On `canon/reference` the lab coat is neutral grey and drops out of the silhouette,
+    so the reference ends AT its collar; our render carries a navy shirt that no colour rule
+    separates reliably (even the strictest blue-dominance test keeps verts up to z=0.45, the
+    crown, because parts of the head sample into blue atlas regions). Measuring ours to the hem
+    and the reference to the collar would compare two different animals — the exact error that has
+    already cost this project six measurements. Everything forward of the brow is bare skin on
+    both, so that is the window this uses, and throat LENGTH is left to a visual ladder rather
+    than given a number it cannot honestly support.
+    """
+    h, w = sil.shape
+    x0, x1 = m["x_brow"], m["x_snout"]
+    cy, ty = m["crown_y"], m["snout_y"]
+    if x1 - x0 < 20 or ty - cy < 20:
+        return None
+    xs = np.linspace(x0, x1, n)
+    X, Y = [], []
+    for xf in xs:
+        c = int(round(xf))
+        col = np.nonzero(sil[:, c])[0]
+        if len(col) < 2:
+            continue
+        X.append((c - x0) / (x1 - x0))
+        Y.append((col.max() - cy) / (ty - cy))
+    if len(X) < n // 2:
+        return None
+    X = np.array(X); Y = np.array(Y)
+    return {
+        "X": X, "Y": Y,
+        "jaw_depth": float(Y.max()),                       # deepest point of the underside
+        "jaw_at_mid": float(np.interp(0.5, X, Y)),         # fullness halfway along the muzzle
+        "jaw_area": float(np.trapezoid(Y, X)) if hasattr(np, "trapezoid") else float(np.trapz(Y, X)),
+    }
+
+
 def draw_snout_marks(sil: np.ndarray, m: dict, out: Path, scale: int = 2) -> None:
     """Draw the landmarks onto the silhouette. Nothing here is quoted before this is eyeballed —
     a previous version of this measurement read the snout tip off a neighbouring panel bleeding

@@ -3663,3 +3663,63 @@ VRM 82.8 MB -> 93.4 MB (the added normal texture). Backup: `mesh/_prev_2026-08-0
 * the pad REGION is broader than the reference's, which confines pink to the muzzle front
 * the fur-to-pad EDGE is a soft gradient where the reference has fur strands overlapping the pink
 * all 48 shape keys are still SAVED AT VALUE 1.0 from `shape_author` onward (pre-existing)
+
+---
+
+## 2026-08-04 — the two cones under the chin: one line, and it was never a proportion problem
+
+Operator, with a screenshot: *"you have these two weird cone like extensions from the chin just
+below the lip… we are kind of going in circles"*. They had also flagged *"this weird lump under
+his lip"* days earlier and I never chased it — I kept measuring proportions around it.
+
+### Found by stage, not by theory
+
+`work/face_ab/_chinshot.py` renders the chin from below-front at every chain stage. The chin is
+CLEAN after `mouth_open` and both cones appear at `chin_mass`. A `--mats` pass colours faces by
+material, which also separated a second, unrelated defect (below).
+
+### ROOT CAUSE: `amp[protect] = 0.0`
+
+`chin_mass` builds its displacement field as `bump(u) * mask_f(along) * mask_l(lateral)` — three
+smoothsteps, all perfectly smooth. Then it hard-zeroes the field on the protected set: the lip
+rim, the cavity, the eyes/teeth/tongue, and the navy garment verts.
+
+**A vertex at full displacement sitting beside one pinned at zero is a STEP in the field, and a
+step in a displacement field is a FOLD in the surface.** The masks were never the problem; the
+boundary condition was. The cones sit exactly where the garment/lateral protection cuts the field
+off while `bump` is still 1.0.
+
+Fixed with Jacobi diffusion under a Dirichlet condition — the protected set is re-zeroed after
+every pass, so those vertices stay EXACTLY untouched (which is the entire point of protecting
+them) while the surrounding field decays into them over several edge lengths. Same remedy as the
+Laplacian pass that fixed the festooned lip bands. `SMOOTH = 14` by default:
+
+    passes    peak amp    verts carrying displacement
+      0        0.995        (hard step — the shipped state)
+     14        0.920        1322
+     30        0.886        1420
+
+30 rounds the chin further but starts eating the mandible volume the stage exists to create, so
+14 is the ship value. The cones are gone; the chin flows into the neck.
+
+### An argument-index collision I made and caught
+
+I added `SMOOTH = int(argv[14])` while `HINGE_UP` already owned index 14, so the first ladder
+passed 0/14/30 as the HINGE HEIGHT and its three renders were meaningless. Caught by reading the
+printed hinge, which was identical across rungs when it should not have been. `SMOOTH` is index 15.
+
+### STILL BROKEN, and it is a different bug — the lip-line shards
+
+The jagged shards along the lip line survive all three diffusion settings, so they are not from
+`chin_mass`. The stage sheet puts them at **`mouth_open`**, and the `--mats` render identifies them
+as **`clyffy_mouth_interior` faces protruding through the skin at rest** — the cavity, not the
+chin. `mouth_open` picks the seam per-FACE, so the cut boundary is a staircase and the cavity is
+extruded from it; at the steps the wall pokes out past the lip.
+
+This is NOT the historical "white spike artifacts" entry in this log, which was a Workbench
+`diffuse_color` issue — these are Cycles renders of real geometry. `lip_seal`'s containment gate
+reports GREEN and `pose_check` passes 30 posed states, so **whatever those gates measure, it is
+not "is cavity visible from outside at rest"**. That gate does not exist yet and should.
+
+Counts: densify now +1133 -> 48259 verts / 48133 faces. accept GREEN, zero warnings; vrm_check
+GREEN. Backup: `mesh/_prev_2026-08-04_pre_chin/`.
